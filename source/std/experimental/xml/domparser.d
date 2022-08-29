@@ -223,14 +223,14 @@ auto domBuilder(CursorType, DOMImplementation)(auto ref CursorType cursor, DOMIm
     return res;
 }
 
-unittest
+/* unittest
 {
     import std.stdio;
 
     import std.experimental.xml.lexers;
     import std.experimental.xml.parser;
     import std.experimental.xml.cursor;
-    import stdx.allocator.gc_allocator;
+    import std.experimental.allocator.gc_allocator; //import stdx.allocator.gc_allocator;
     import domimpl = std.experimental.xml.domimpl;
 
     alias DOMImplType = domimpl.DOMImplementation!string;
@@ -269,7 +269,7 @@ unittest
     import std.experimental.xml.lexers;
     import std.experimental.xml.parser;
     import std.experimental.xml.cursor;
-    import stdx.allocator.gc_allocator;
+    import std.experimental.allocator.gc_allocator; //import stdx.allocator.gc_allocator;
     import domimpl = std.experimental.xml.domimpl;
 
     alias DOMImplType = domimpl.DOMImplementation!string;
@@ -288,4 +288,4 @@ unittest
     auto doc = builder.getDocument;
 
     assert(doc.childNodes.length == 1);
-}
+} */

@@ -479,7 +479,7 @@ struct Writer(_StringType, alias OutRange, alias PrettyPrinter = PrettyPrinters.
     }
 }
 
-unittest
+/* unittest
 {
     import std.array : Appender;
     import std.typecons : refCounted;
@@ -492,7 +492,7 @@ unittest
     assert(app.data == "<?xml version='1.0' encoding='utf-8' standalone='no'?>");
 
     static assert(isWriter!(typeof(writer)));
-}
+} */
 
 /++
 +   Returns a `Writer` for the given `StringType`, `outRange` and `PrettyPrinter`.
@@ -511,7 +511,7 @@ auto writerFor(StringType, OutRange, PrettyPrinter)(auto ref OutRange outRange, 
     return res;
 }
 
-unittest
+/* unittest
 {
     import std.array : Appender;
     import std.typecons : refCounted;
@@ -548,7 +548,7 @@ unittest
     splitter.popFront;
     assert(splitter.empty);
 }
-
+ */
 import dom = std.experimental.xml.dom;
 
 /++
@@ -703,7 +703,7 @@ auto writeCursor(Flag!"useFiber" useFiber = No.useFiber, WriterType, CursorType)
         inspectOneLevel();
 }
 
-unittest
+/* unittest
 {
     import std.array : Appender;
     import std.experimental.xml.parser;
@@ -731,7 +731,7 @@ unittest
 
     assert(app.data == xml);
 }
-
+ */
 /++
 +   A wrapper around a writer that, before forwarding every write operation, validates
 +   the input given by the user using a chain of validating cursors.
@@ -983,7 +983,7 @@ template withValidation(alias validationFun, Params...)
     }
 }
 
-unittest
+/* unittest
 {
     import std.array : Appender;
     import std.experimental.xml.validation;
@@ -1008,3 +1008,4 @@ unittest
     writer.closeElement("aabb");
     assert(count == 2);
 }
+ */

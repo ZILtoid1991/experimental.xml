@@ -12,12 +12,23 @@
 module std.experimental.xml.dtd;
 
 import std.experimental.xml.interfaces;
-import stdx.allocator.gc_allocator;
 import std.typecons : Flag, No;
 
-enum DTDCheckerError
+/+enum DTDCheckerError
 {
     DTD_SYNTAX,
+}+/
+public class DTDException : XMLException {
+    @nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, 
+            Throwable nextInChain = null)
+    {
+        super(msg, file, line, nextInChain);
+    }
+
+    @nogc @safe pure nothrow this(string msg, Throwable nextInChain, string file = __FILE__, size_t line = __LINE__)
+    {
+        super(msg, file, line, nextInChain);
+    }
 }
 struct DTDCheckerOptions
 {
@@ -45,8 +56,7 @@ struct DTDCheckerOptions
     };
 }
 
-struct DTDChecker(CursorType, ErrorHandler, Alloc = shared(GCAllocator),
-                  DTDCheckerOptions options = DTDCheckerOptions.strict)
+struct DTDChecker(CursorType, DTDCheckerOptions options = DTDCheckerOptions.strict)
     if (isCursor!CursorType)
 {
     import std.experimental.xml.faststrings;
@@ -57,8 +67,6 @@ struct DTDChecker(CursorType, ErrorHandler, Alloc = shared(GCAllocator),
 
     CursorType cursor;
     alias cursor this;
-
-    mixin UsesAllocator!Alloc;
 
     struct Element
     {
@@ -112,7 +120,7 @@ struct DTDChecker(CursorType, ErrorHandler, Alloc = shared(GCAllocator),
     private StringType[StringType] entities;
     private StringType rootElem, pubID, sysID;
 
-    ErrorHandler errorHandler;
+    //ErrorHandler errorHandler;
 
     bool enter()
     {
@@ -127,8 +135,8 @@ struct DTDChecker(CursorType, ErrorHandler, Alloc = shared(GCAllocator),
                 auto start = dtd.fastIndexOfNeither(" \r\n\t");
                 if (start == -1)
                 {
-                    errorHandler(DTDCheckerError.DTD_SYNTAX);
-                    return true;
+                    throw new DTDException("DTD Syntax error!");//errorHandler(DTDCheckerError.DTD_SYNTAX);
+                    //return true;
                 }
                 dtd = dtd[start..$];
 
@@ -148,14 +156,14 @@ struct DTDChecker(CursorType, ErrorHandler, Alloc = shared(GCAllocator),
                     return true;
                 if (dtd[bracket] != '[')
                 {
-                    errorHandler(DTDCheckerError.DTD_SYNTAX);
-                    return true;
+                    throw new DTDException("DTD Syntax error!");
+                    //return true;
                 }
                 auto close = dtd.fastLastIndexOf(']');
                 if (dtd[(close+1)..$].fastIndexOfNeither(" \r\n\t") != -1)
                 {
-                    errorHandler(DTDCheckerError.DTD_SYNTAX);
-                    return true;
+                    throw new DTDException("DTD Syntax error!");
+                    //return true;
                 }
                 dtd = dtd[(bracket+1)..close];
 
@@ -188,7 +196,7 @@ struct DTDChecker(CursorType, ErrorHandler, Alloc = shared(GCAllocator),
                     parseEntityDecl(cur.content);
                     break;
                 default:
-                    errorHandler(DTDCheckerError.DTD_SYNTAX);
+                    throw new DTDException("DTD Syntax error!");
             }
         }
         while (cur.next);
@@ -203,15 +211,15 @@ struct DTDChecker(CursorType, ErrorHandler, Alloc = shared(GCAllocator),
         auto name = parseWord(decl);
         if (!name)
         {
-            errorHandler(DTDCheckerError.DTD_SYNTAX);
-            return;
+            throw new DTDException("DTD Syntax error!");
+            //return;
         }
 
         auto elem = name in elems;
         if (elem && !options.allowOverrides)
         {
-            errorHandler(DTDCheckerError.DTD_SYNTAX);
-            return;
+            throw new DTDException("DTD Syntax error!");
+            //return;
         }
         if (!elem)
         {
@@ -222,8 +230,8 @@ struct DTDChecker(CursorType, ErrorHandler, Alloc = shared(GCAllocator),
         auto contentType = parseWord(decl);
         if (!contentType)
         {
-            errorHandler(DTDCheckerError.DTD_SYNTAX);
-            return;
+            throw new DTDException("DTD Syntax error!");
+            //return;
         }
 
         if (contentType.length == 3 && fastEqual(contentType, "ANY"))
@@ -268,22 +276,22 @@ struct DTDChecker(CursorType, ErrorHandler, Alloc = shared(GCAllocator),
         auto start = str.fastIndexOfNeither(" \r\n\t");
         if (start == -1)
         {
-            errorHandler(DTDCheckerError.DTD_SYNTAX);
-            return [];
+            throw new DTDException("DTD Syntax error!");
+            //return [];
         }
 
         auto ch = str[start];
         if (ch != '\'' && ch != '"')
         {
-            errorHandler(DTDCheckerError.DTD_SYNTAX);
-            return [];
+            throw new DTDException("DTD Syntax error!");
+            //return [];
         }
 
         auto end = str[(start+1)..$].fastIndexOf(ch);
         if (end == -1)
         {
-            errorHandler(DTDCheckerError.DTD_SYNTAX);
-            return [];
+            throw new DTDException("DTD Syntax error!");
+            //return [];
         }
 
         auto res = str[(start+1)..(start+end+1)];
@@ -327,25 +335,18 @@ struct DTDChecker(CursorType, ErrorHandler, Alloc = shared(GCAllocator),
     }
 }
 
-auto dtdChecker(DTDCheckerOptions options = DTDCheckerOptions.strict, Allocator, ErrorHandler, CursorType)
-               (auto ref CursorType cursor, ref Allocator alloc,
-                ErrorHandler handler = (DTDCheckerError err) { assert(0, "DTD error"); } )
+auto dtdChecker(DTDCheckerOptions options = DTDCheckerOptions.strict, CursorType)
+               (auto ref CursorType cursor)
 {
-    auto res = DTDChecker!(CursorType, ErrorHandler, Allocator, options)(alloc);
+    auto res = DTDChecker!(CursorType, options)();
     res.cursor = cursor;
-    res.errorHandler = handler;
     return res;
 }
-auto dtdChecker(Allocator = shared(GCAllocator), DTDCheckerOptions options = DTDCheckerOptions.strict,
-                ErrorHandler, CursorType)
-               (auto ref CursorType cursor, ErrorHandler handler = (DTDCheckerError err) { assert(0, "DTD error"); } )
-    if (is(typeof(Allocator.instance)))
-{
-    return dtdChecker!(options)(cursor, Allocator.instance, handler);
-}
+
 
 unittest
 {
+    import std.experimental.xml.lexers;
     import std.experimental.xml.parser;
     import std.experimental.xml.cursor;
 
@@ -360,6 +361,7 @@ unittest
 
     auto cursor =
          xml
+        .lexer
         .parser
         .cursor
         .dtdChecker;

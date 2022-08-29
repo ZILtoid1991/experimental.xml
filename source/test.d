@@ -147,7 +147,7 @@ Results handleTest(T)(string directory, ref T cursor, int depth)
     {
         linted_ok = parseFile(directory ~ dirSeparator ~ file, linted);
     }
-    catch (MyException err)
+    catch (Exception err)
     {
         passed = false;
     }
@@ -205,12 +205,12 @@ class MyException: Exception
     }
 }
 
-// callback used to ignore missing xml declaration, while throwing on invalid attributes
+/* // callback used to ignore missing xml declaration, while throwing on invalid attributes
 void uselessCallback(CursorError err)
 {
     if (err != CursorError.missingXMLDeclaration)
         throw new MyException("AAAAHHHHH");
-}
+} */
 
 /++
 + Most tests are currently not working for the following reasons:
@@ -221,7 +221,7 @@ void main()
     auto cursor = 
          chooseLexer!string
         .parser
-        .cursor(&uselessCallback); // If an index is not well-formed, just tell us but continue parsing
+        .cursor(); // If an index is not well-formed, just tell us but continue parsing
     
     auto results = Results();
     foreach (i, index; indexes)
@@ -279,10 +279,7 @@ bool parseFile(string filename, ref bool lint)
         }
     }
     
-    auto cursor = 
-         text
-        .parser(() { throw new MyException("AAAAHHHHH"); })
-        .cursor(&uselessCallback); // lots of tests do not have an xml declaration
+    auto cursor = text.lexer.parser.cursor; // lots of tests do not have an xml declaration
     
     cursor.setSource(text);
     

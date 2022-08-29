@@ -478,7 +478,9 @@ template isSaveableCursor(CursorType)
 }
 
 // WRITERS
-
+/++ 
+ + Tests whether the given type is a writer.
+ +/
 template isWriter(WriterType)
 {
     enum bool isWriter = is(typeof(
@@ -520,17 +522,23 @@ template needSource(T)
 +   Generic XML exception; thrown whenever a component experiences an error, unless
 +   the user provided a custom error handler.
 +/
-class XMLException: Exception
+class XMLException : Exception
 {
-    this(string msg, string file = __FILE__, size_t line = __LINE__)
+    @nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, 
+            Throwable nextInChain = null)
     {
-        super(msg, file, line);
+        super(msg, file, line, nextInChain);
+    }
+
+    @nogc @safe pure nothrow this(string msg, Throwable nextInChain, string file = __FILE__, size_t line = __LINE__)
+    {
+        super(msg, file, line, nextInChain);
     }
 }
 
 // PRIVATE STUFF
 
-package mixin template UsesAllocator(Alloc, bool genDefaultCtor = false)
+/* package mixin template UsesAllocator(Alloc, bool genDefaultCtor = false)
 {
     static if (is(Alloc == class))
         private alias TrueAlloc = Alloc;
@@ -574,4 +582,4 @@ package mixin template UsesErrorHandler(ErrorHandler)
         assert(eh, "Null errorHandler on setting");
         handler = eh;
     }
-}
+} */

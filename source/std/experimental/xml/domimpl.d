@@ -23,11 +23,12 @@ module std.experimental.xml.domimpl;
 import std.experimental.xml.interfaces;
 import dom = std.experimental.xml.dom;
 import std.typecons : rebindable, Flag, BitFlags;
-import stdx.allocator;
-import stdx.allocator.gc_allocator;
+//import std.experimental.allocator;//import stdx.allocator;
+//import std.experimental.allocator.gc_allocator;//import stdx.allocator.gc_allocator;
+import std.range.primitives;
 
-// this is needed because compilers up to at least DMD 2.071.1 suffer from issue 16319
-private auto multiVersionMake(Type, Allocator, Args...)(ref Allocator allocator, auto ref Args args)
+/* // this is needed because compilers up to at least DMD 2.071.1 suffer from issue 16319
+private auto multiVersionMake(Type, Args...)(auto ref Args args)
 {
     static if (Args.length == 0  && __traits(compiles, allocator.make!Type(args)))
         return allocator.make!Type(args);
@@ -38,7 +39,7 @@ private auto multiVersionMake(Type, Allocator, Args...)(ref Allocator allocator,
     }
     else
         static assert(0, "multiVersionMake failed...");
-}
+} */
 
 /++
 +   An implementation of $(LINK2 ../dom/DOMImplementation, `std.experimental.xml.dom.DOMImplementation`).
@@ -48,11 +49,11 @@ private auto multiVersionMake(Type, Allocator, Args...)(ref Allocator allocator,
 +   does not try to do so. Instead, no object is ever deallocated; it is the users responsibility
 +   to directly free the allocator memory when all objects are no longer reachable.
 +/
-class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = bool delegate(dom.DOMError!DOMString))
+class DOMImplementation(DOMString, ErrorHandler = bool delegate(dom.DOMError!DOMString))
                         : dom.DOMImplementation!DOMString
 {
-    mixin UsesAllocator!(Alloc, true);
-
+    //mixin UsesAllocator!(Alloc, true);
+    alias CharType = ElementEncodingType!DOMString;
     override
     {
         /++
@@ -61,7 +62,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
         +/
         DocumentType createDocumentType(DOMString qualifiedName, DOMString publicId, DOMString systemId)
         {
-            auto res = allocator.multiVersionMake!DocumentType(this);
+            auto res = new DocumentType();//allocator.multiVersionMake!DocumentType(this);
             res._name = qualifiedName;
             res._publicId = publicId;
             res._systemId = systemId;
@@ -75,17 +76,17 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
         {
             auto doctype = cast(DocumentType)_doctype;
             if (_doctype && !doctype)
-                throw allocator.multiVersionMake!DOMException(this, dom.ExceptionCode.wrongDocument);
+                throw new DOMException(dom.ExceptionCode.wrongDocument);//allocator.multiVersionMake!DOMException(this, dom.ExceptionCode.wrongDocument);
 
-            auto doc = allocator.multiVersionMake!Document(this);
+            auto doc = new Document();//allocator.multiVersionMake!Document(this);
             doc._ownerDocument = doc;
             doc._doctype = doctype;
-            doc._config = allocator.multiVersionMake!DOMConfiguration(this);
+            doc._config = new DOMConfiguration();//allocator.multiVersionMake!DOMConfiguration(this);
 
             if (namespaceURI)
             {
                 if (!qualifiedName)
-                    throw allocator.multiVersionMake!DOMException(this, dom.ExceptionCode.namespace);
+                    throw new DOMException(dom.ExceptionCode.namespace);//allocator.multiVersionMake!DOMException(this, dom.ExceptionCode.namespace);
                 doc.appendChild(doc.createElementNS(namespaceURI, qualifiedName));
             }
             else if (qualifiedName)
@@ -144,6 +145,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     /// Implementation of $(LINK2 ../dom/Node, `std.experimental.xml.dom.Node`)
     abstract class Node: dom.Node!DOMString
     {
+        package this() {
+
+        }
         override
         {
             /// Implementation of $(LINK2 ../dom/Node.ownerDocument, `std.experimental.xml.dom.Node.ownerDocument`).
@@ -374,30 +378,34 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 static ChildList emptyList;
                 if (!emptyList)
                 {
-                    emptyList = allocator.multiVersionMake!ChildList(this);
+                    emptyList = new ChildList();//allocator.multiVersionMake!ChildList(this);
                     emptyList.currentChild = firstChild;
                 }
                 return emptyList;
             }
             @property Node firstChild() { return null; }
             @property Node lastChild() { return null; }
-
+            ///TODO: Implement!
             Node insertBefore(dom.Node!DOMString _newChild, dom.Node!DOMString _refChild)
             {
-                throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
             }
+            ///TODO: Implement!
             Node replaceChild(dom.Node!DOMString newChild, dom.Node!DOMString oldChild)
             {
-                throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
             }
+            ///TODO: Implement!
             Node removeChild(dom.Node!DOMString oldChild)
             {
-                throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
+                throw new DOMException(dom.ExceptionCode.notFound);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
             }
+            ///TODO: Implement!
             Node appendChild(dom.Node!DOMString newChild)
             {
-                throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
             }
+            ///TODO: Implement!
             bool hasChildNodes() const { return false; }
         }
         // methods specialized in Element
@@ -510,6 +518,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
         class ChildList: dom.NodeList!DOMString
         {
             private Node currentChild;
+            package this() {
+
+            }
             // methods specific to NodeList
             override
             {
@@ -562,11 +573,14 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     }
     private abstract class NodeWithChildren: Node
     {
+        package this() {
+
+        }
         override
         {
             @property ChildList childNodes()
             {
-                auto res = allocator.multiVersionMake!ChildList(this);
+                auto res = new ChildList();//allocator.multiVersionMake!ChildList(this);
                 res.currentChild = firstChild;
                 return res;
             }
@@ -582,19 +596,18 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             Node insertBefore(dom.Node!DOMString _newChild, dom.Node!DOMString _refChild)
             {
                 if (readonly)
-                    throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                  dom.ExceptionCode.noModificationAllowed);
+                    throw new DOMException(dom.ExceptionCode.noModificationAllowed); //allocator.multiVersionMake!DOMException(this.outer,dom.ExceptionCode.noModificationAllowed);
                 if (!_refChild)
                     return appendChild(_newChild);
 
                 auto newChild = cast(Node)_newChild;
                 auto refChild = cast(Node)_refChild;
                 if (!newChild || !refChild || newChild.ownerDocument !is ownerDocument)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.wrongDocument);
+                    throw new DOMException(dom.ExceptionCode.wrongDocument); //allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.wrongDocument);
                 if (this is newChild || newChild.isAncestor(this) || newChild is refChild)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                    throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
                 if (refChild.parentNode !is this)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
+                    throw new DOMException(dom.ExceptionCode.notFound);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
 
                 if (newChild.nodeType == dom.NodeType.documentFragment)
                 {
@@ -625,11 +638,10 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             Node removeChild(dom.Node!DOMString _oldChild)
             {
                 if (readonly)
-                    throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                  dom.ExceptionCode.noModificationAllowed);
+                    throw new DOMException(dom.ExceptionCode.noModificationAllowed);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
                 auto oldChild = cast(Node)_oldChild;
                 if (!oldChild || oldChild.parentNode !is this)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
+                    throw new DOMException(dom.ExceptionCode.notFound);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
 
                 if (oldChild is firstChild)
                     _firstChild = oldChild.nextSibling;
@@ -649,13 +661,12 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             Node appendChild(dom.Node!DOMString _newChild)
             {
                 if (readonly)
-                    throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                  dom.ExceptionCode.noModificationAllowed);
+                    throw new DOMException(dom.ExceptionCode.noModificationAllowed);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
                 auto newChild = cast(Node)_newChild;
                 if (!newChild || newChild.ownerDocument !is ownerDocument)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.wrongDocument);
+                    throw new DOMException(dom.ExceptionCode.wrongDocument);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.wrongDocument);
                 if (this is newChild || newChild.isAncestor(this))
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                    throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
                 if (newChild.parentNode !is null)
                     newChild.parentNode.removeChild(newChild);
 
@@ -695,24 +706,23 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
 
             @property DOMString textContent()
             {
-                import std.experimental.xml.appender;
-
-                auto result = Appender!(typeof(this.textContent()[0]), typeof(*allocator))(allocator);
+                //import std.experimental.xml.appender;
+                CharType[] result;
+                //auto result = Appender!(typeof(this.textContent()[0]), typeof(*allocator))(allocator);
                 for (auto child = rebindable(firstChild); child !is null; child = child.nextSibling)
                 {
                     if (child.nodeType != dom.NodeType.comment &&
                         child.nodeType != dom.NodeType.processingInstruction)
                     {
-                        result.put(child.textContent);
+                        result ~= child.textContent();//result.put(child.textContent);
                     }
                 }
-                return result.data;
+                return result.idup;
             }
             @property void textContent(DOMString newVal)
             {
                 if (readonly)
-                    throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                  dom.ExceptionCode.noModificationAllowed);
+                    throw new DOMException(dom.ExceptionCode.noModificationAllowed);// allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
 
                 while (firstChild)
                     removeChild(firstChild);
@@ -739,6 +749,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     /// Implementation of $(LINK2 ../dom/DocumentFragment, `std.experimental.xml.dom.DocumentFragment`)
     class DocumentFragment: NodeWithChildren, dom.DocumentFragment!DOMString
     {
+        package this() {
+
+        }
         // inherited from Node
         override
         {
@@ -749,6 +762,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     /// Implementation of $(LINK2 ../dom/Document, `std.experimental.xml.dom.Document`)
     class Document: NodeWithChildren, dom.Document!DOMString
     {
+        package this() {
+
+        }
         // specific to Document
         override
         {
@@ -758,51 +774,51 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
 
             Element createElement(DOMString tagName)
             {
-                auto res = allocator.multiVersionMake!Element(this.outer);
+                auto res = new Element(); //allocator.multiVersionMake!Element(this.outer);
                 res._name = tagName;
                 res._ownerDocument = this;
-                res._attrs = allocator.multiVersionMake!(Element.Map)(res);
+                res._attrs = new Element.Map(); //allocator.multiVersionMake!(Element.Map)(res);
                 return res;
             }
             Element createElementNS(DOMString namespaceURI, DOMString qualifiedName)
             {
-                auto res = allocator.multiVersionMake!Element(this.outer);
+                auto res = new Element();//allocator.multiVersionMake!Element(this.outer);
                 res.setQualifiedName(qualifiedName);
                 res._namespaceURI = namespaceURI;
                 res._ownerDocument = this;
-                res._attrs = allocator.multiVersionMake!(Element.Map)(res);
+                res._attrs = new Element.Map();//allocator.multiVersionMake!(Element.Map)(res);
                 return res;
             }
             DocumentFragment createDocumentFragment()
             {
-                auto res = allocator.multiVersionMake!DocumentFragment(this.outer);
+                auto res = new DocumentFragment();//allocator.multiVersionMake!DocumentFragment(this.outer);
                 res._ownerDocument = this;
                 return res;
             }
             Text createTextNode(DOMString data)
             {
-                auto res = allocator.multiVersionMake!Text(this.outer);
+                auto res = new Text();//allocator.multiVersionMake!Text(this.outer);
                 res._data = data;
                 res._ownerDocument = this;
                 return res;
             }
             Comment createComment(DOMString data)
             {
-                auto res = allocator.multiVersionMake!Comment(this.outer);
+                auto res = new Comment();//allocator.multiVersionMake!Comment(this.outer);
                 res._data = data;
                 res._ownerDocument = this;
                 return res;
             }
             CDATASection createCDATASection(DOMString data)
             {
-                auto res = allocator.multiVersionMake!CDATASection(this.outer);
+                auto res = new CDATASection();//allocator.multiVersionMake!CDATASection(this.outer);
                 res._data = data;
                 res._ownerDocument = this;
                 return res;
             }
             ProcessingInstruction createProcessingInstruction(DOMString target, DOMString data)
             {
-                auto res = allocator.multiVersionMake!ProcessingInstruction(this.outer);
+                auto res = new ProcessingInstruction();//allocator.multiVersionMake!ProcessingInstruction(this.outer);
                 res._target = target;
                 res._data = data;
                 res._ownerDocument = this;
@@ -810,14 +826,14 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             }
             Attr createAttribute(DOMString name)
             {
-                auto res = allocator.multiVersionMake!Attr(this.outer);
+                auto res = new Attr();//allocator.multiVersionMake!Attr(this.outer);
                 res._name = name;
                 res._ownerDocument = this;
                 return res;
             }
             Attr createAttributeNS(DOMString namespaceURI, DOMString qualifiedName)
             {
-                auto res = allocator.multiVersionMake!Attr(this.outer);
+                auto res = new Attr();//allocator.multiVersionMake!Attr(this.outer);
                 res.setQualifiedName(qualifiedName);
                 res._namespaceURI = namespaceURI;
                 res._ownerDocument = this;
@@ -827,7 +843,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
 
             ElementsByTagName getElementsByTagName(DOMString tagname)
             {
-                auto res = allocator.multiVersionMake!ElementsByTagName;
+                auto res = new ElementsByTagName();//allocator.multiVersionMake!ElementsByTagName;
                 res.root = this;
                 res.tagname = tagname;
                 res.current = res.item(0);
@@ -835,7 +851,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             }
             ElementsByTagNameNS getElementsByTagNameNS(DOMString namespaceURI, DOMString localName)
             {
-                auto res = allocator.multiVersionMake!ElementsByTagNameNS;
+                auto res = new ElementsByTagNameNS();//allocator.multiVersionMake!ElementsByTagNameNS;
                 res.root = this;
                 res.namespaceURI = namespaceURI;
                 res.localName = localName;
@@ -912,7 +928,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                     case processingInstruction:
                         return createProcessingInstruction(node.nodeName, node.nodeValue);
                     default:
-                        throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notSupported);
+                        throw new DOMException(dom.ExceptionCode.notSupported);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notSupported);
                 }
             }
             Node adoptNode(dom.Node!DOMString source) { return null; }
@@ -929,7 +945,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 if (ver == "1.0" || ver == "1.1")
                     _xmlVersion = ver;
                 else
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notSupported);
+                    throw new DOMException(dom.ExceptionCode.notSupported);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notSupported);
             }
 
             @property bool strictErrorChecking() { return _strictErrorChecking; }
@@ -944,11 +960,11 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             {
                 auto node = cast(Node)n;
                 if (!node || node.ownerDocument !is this)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.wrongDocument);
+                    throw new DOMException(dom.ExceptionCode.wrongDocument);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.wrongDocument);
 
                 auto type = node.nodeType;
                 if (type != dom.NodeType.element && type != dom.NodeType.attribute)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notSupported);
+                    throw new DOMException(dom.ExceptionCode.notSupported);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notSupported);
 
                 auto withNs = (cast(NodeWithNamespace)node);
                 withNs.setQualifiedName(qualifiedName);
@@ -991,7 +1007,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 if (newChild.nodeType == dom.NodeType.element)
                 {
                     if (_root)
-                        throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                        throw DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
 
                     auto res = super.insertBefore(newChild, refChild);
                     _root = cast(Element)newChild;
@@ -1000,7 +1016,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 else if (newChild.nodeType == dom.NodeType.documentType)
                 {
                     if (_doctype)
-                        throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                        throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
 
                     auto res = super.insertBefore(newChild, refChild);
                     _doctype = cast(DocumentType)newChild;
@@ -1008,7 +1024,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 }
                 else if (newChild.nodeType != dom.NodeType.comment &&
                          newChild.nodeType != dom.NodeType.processingInstruction)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                    throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
                 else
                     return super.insertBefore(newChild, refChild);
             }
@@ -1017,7 +1033,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 if (newChild.nodeType == dom.NodeType.element)
                 {
                     if (oldChild !is _root)
-                        throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                        throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
 
                     auto res = super.replaceChild(newChild, oldChild);
                     _root = cast(Element)newChild;
@@ -1026,7 +1042,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 else if (newChild.nodeType == dom.NodeType.documentType)
                 {
                     if (oldChild !is _doctype)
-                        throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                        throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
 
                     auto res = super.replaceChild(newChild, oldChild);
                     _doctype = cast(DocumentType)newChild;
@@ -1034,7 +1050,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 }
                 else if (newChild.nodeType != dom.NodeType.comment &&
                          newChild.nodeType != dom.NodeType.processingInstruction)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                    throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
                 else
                     return super.replaceChild(newChild, oldChild);
             }
@@ -1060,7 +1076,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 if (newChild.nodeType == dom.NodeType.element)
                 {
                     if (_root)
-                        throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                        throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
 
                     auto res = super.appendChild(newChild);
                     _root = cast(Element)newChild;
@@ -1069,7 +1085,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 else if (newChild.nodeType == dom.NodeType.documentType)
                 {
                     if (_doctype)
-                        throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
+                        throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.hierarchyRequest);
 
                     auto res = super.appendChild(newChild);
                     _doctype = cast(DocumentType)newChild;
@@ -1084,6 +1100,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     alias ElementsByTagNameNS = ElementsByTagNameImpl!true;
     static class ElementsByTagNameImpl(bool ns): dom.NodeList!DOMString
     {
+        package this() {
+
+        }
         private Node root;
         private Element current;
         static if (ns)
@@ -1184,7 +1203,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             DOMString substringData(size_t offset, size_t count)
             {
                 if (offset > length)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.indexSize);
+                    throw new DOMException(dom.ExceptionCode.indexSize);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.indexSize);
 
                 import std.algorithm : min;
                 return _data[offset..min(offset + count, length)];
@@ -1193,39 +1212,40 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             {
                 import std.traits : Unqual;
 
-                auto newData = allocator.makeArray!(Unqual!(typeof(_data[0])))(_data.length + arg.length);
-                newData[0 .. data.length] = _data[];
-                newData[data.length .. $] = arg[];
+                //auto newData = allocator.makeArray!(Unqual!(typeof(_data[0])))(_data.length + arg.length);
 
-                _data = cast(typeof(_data))newData;
+                _data ~= arg;
             }
             void insertData(size_t offset, DOMString arg)
             {
                 import std.traits : Unqual;
 
                 if (offset > length)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.indexSize);
+                    throw new DOMException(dom.ExceptionCode.indexSize);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.indexSize);
 
-                auto newData = allocator.makeArray!(Unqual!(typeof(_data[0])))(_data.length + arg.length);
-                newData[0 .. offset] = _data[0 .. offset];
+                //auto newData = allocator.makeArray!(Unqual!(typeof(_data[0])))(_data.length + arg.length);
+                /+CharType[] newData;
+                newData.reserve = _data.length + arg.length;
+                newData = _data[0 .. offset];
                 newData[offset .. (offset + arg.length)] = arg;
                 newData[(offset + arg.length) .. $] = _data[offset .. $];
 
-                _data = cast(typeof(_data))newData;
+                _data = cast(typeof(_data))newData;+/
+                DOMString newData = _data[0 .. offset] ~ arg ~ _data[offset..$];
+                _data = newData;
             }
             void deleteData(size_t offset, size_t count)
             {
                 import std.traits : Unqual;
 
                 if (offset > length)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.indexSize);
+                    throw new DOMException(dom.ExceptionCode.indexSize);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.indexSize);
 
                 import std.algorithm : min;
                 auto end = min(offset + count, length);
 
-                auto newData = allocator.makeArray!(Unqual!(typeof(_data[0])))(_data.length - end + offset);
-                newData[0 .. offset] = _data[0 .. offset];
-                newData[offset .. $] = data[end .. $];
+                //auto newData = allocator.makeArray!(Unqual!(typeof(_data[0])))(_data.length - end + offset);
+                DOMString newData = _data[0 .. offset] ~ data[end .. $];
 
                 _data = cast(typeof(_data))newData;
             }
@@ -1234,16 +1254,12 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 import std.traits : Unqual;
 
                 if (offset > length)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.indexSize);
+                    throw new DOMException(dom.ExceptionCode.indexSize);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.indexSize);
 
                 import std.algorithm : min;
                 auto end = min(offset + count, length);
 
-                auto newData = allocator.makeArray!(Unqual!(typeof(_data[0])))
-                                                   (_data.length - end + offset + arg.length);
-                newData[0 .. offset] = _data[0 .. offset];
-                newData[offset .. (offset + arg.length)] = arg[];
-                newData[(offset + arg.length) .. $] = _data[end .. $];
+                DOMString newData = _data[0 .. offset] ~ arg ~ data[end .. $];
 
                 _data = cast(typeof(_data))newData;
             }
@@ -1255,16 +1271,14 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             @property void nodeValue(DOMString newVal)
             {
                 if (readonly)
-                    throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                  dom.ExceptionCode.noModificationAllowed);
+                    throw new DOMException(dom.ExceptionCode.noModificationAllowed);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
                 data = newVal;
             }
             @property DOMString textContent() { return data; }
             @property void textContent(DOMString newVal)
             {
                 if (readonly)
-                    throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                  dom.ExceptionCode.noModificationAllowed);
+                    throw new DOMException(dom.ExceptionCode.noModificationAllowed);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
                 data = newVal;
             }
         }
@@ -1322,17 +1336,16 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             @property void prefix(DOMString pre)
             {
                 if (readonly)
-                    throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                  dom.ExceptionCode.noModificationAllowed);
+                    throw new DOMException(dom.ExceptionCode.noModificationAllowed);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
 
                 import std.traits : Unqual;
 
-                auto newName = allocator.makeArray!(Unqual!(typeof(_name[0])))(pre.length + localName.length + 1);
+                /+auto newName = allocator.makeArray!(Unqual!(typeof(_name[0])))(pre.length + localName.length + 1);
                 newName[0 .. pre.length] = pre[];
                 newName[pre.length] = ':';
-                newName[(pre.length + 1) .. $] = localName[];
+                newName[(pre.length + 1) .. $] = localName[];+/
 
-                _name = cast(typeof(_name))newName;
+                _name = pre ~ ":" ~ localName;//cast(typeof(_name))newName;
                 _colon = pre.length;
             }
             @property DOMString namespaceURI() { return _namespaceURI; }
@@ -1341,6 +1354,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     /// Implementation of $(LINK2 ../dom/Attr, `std.experimental.xml.dom.Attr`)
     class Attr: NodeWithNamespace, dom.Attr!DOMString
     {
+        package this() {
+
+        }
         // specific to Attr
         override
         {
@@ -1353,14 +1369,15 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             {
                 import std.experimental.xml.appender;
 
-                auto result = Appender!(typeof(_name[0]), typeof(*allocator))(allocator);
+                //auto result = Appender!(typeof(_name[0]), typeof(*allocator))(allocator);
+                DOMString result;
                 auto child = rebindable(firstChild);
                 while (child)
                 {
-                    result.put(child.textContent);
+                    result ~= child.textContent;//result.put(child.textContent);
                     child = child.nextSibling;
                 }
-                return result.data;
+                return result;
             }
             /// ditto
             @property void value(DOMString newVal)
@@ -1393,8 +1410,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             @property void nodeValue(DOMString newVal)
             {
                 if (readonly)
-                    throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                  dom.ExceptionCode.noModificationAllowed);
+                    throw new DOMException(dom.ExceptionCode.noModificationAllowed);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
                 value = newVal;
             }
 
@@ -1404,7 +1420,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
 
             Attr cloneNode(bool deep)
             {
-                Attr cloned = allocator.multiVersionMake!Attr(this.outer);
+                Attr cloned = new Attr();//allocator.multiVersionMake!Attr(this.outer);
                 cloned._ownerDocument = _ownerDocument;
                 super.performClone(cloned, true);
                 cloned._specified = true;
@@ -1434,6 +1450,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     /// Implementation of $(LINK2 ../dom/Element, `std.experimental.xml.dom.Element`)
     class Element: NodeWithNamespace, dom.Element!DOMString
     {
+        package this() {
+
+        }
         // specific to Element
         override
         {
@@ -1495,7 +1514,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 else if (_attrs.getNamedItem(oldAttr.name) is oldAttr)
                     return _attrs.removeNamedItem(oldAttr.name);
 
-                throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
+                throw new DOMException(dom.ExceptionCode.notFound);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
             }
 
             /++
@@ -1570,7 +1589,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 if (attr)
                     attr._isId = isId;
                 else
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
+                    throw new DOMException(dom.ExceptionCode.notFound);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
             }
             /++
             +   Implementation of $(LINK2 ../dom/Element.setIdAttributeNS,
@@ -1582,7 +1601,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 if (attr)
                     attr._isId = isId;
                 else
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
+                    throw new DOMException(dom.ExceptionCode.notFound);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
             }
             /++
             +   Implementation of $(LINK2 ../dom/Element.getAttribute,
@@ -1595,7 +1614,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 else if (_attrs.getNamedItem(idAttr.name) is idAttr)
                     (cast(Attr)idAttr)._isId = isId;
                 else
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
+                    throw new DOMException(dom.ExceptionCode.notFound);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
             }
 
             /++
@@ -1604,7 +1623,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             +/
             ElementsByTagName getElementsByTagName(DOMString tagname)
             {
-                auto res = allocator.multiVersionMake!ElementsByTagName;
+                auto res = new ElementsByTagName();//allocator.multiVersionMake!ElementsByTagName;
                 res.root = this;
                 res.tagname = tagname;
                 res.current = res.item(0);
@@ -1616,7 +1635,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             +/
             ElementsByTagNameNS getElementsByTagNameNS(DOMString namespaceURI, DOMString localName)
             {
-                auto res = allocator.multiVersionMake!ElementsByTagNameNS;
+                auto res = new ElementsByTagNameNS();//allocator.multiVersionMake!ElementsByTagNameNS;
                 res.root = this;
                 res.namespaceURI = namespaceURI;
                 res.localName = localName;
@@ -1665,9 +1684,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
 
             Element cloneNode(bool deep)
             {
-                auto cloned = allocator.multiVersionMake!Element(this.outer);
+                auto cloned = new Element();//allocator.multiVersionMake!Element(this.outer);
                 cloned._ownerDocument = ownerDocument;
-                cloned._attrs = allocator.multiVersionMake!Map(this);
+                cloned._attrs = new Map();//allocator.multiVersionMake!Map(this);
                 super.performClone(cloned, deep);
                 return cloned;
             }
@@ -1713,6 +1732,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
 
         class Map: dom.NamedNodeMap!DOMString
         {
+            package this() {
+
+            }
             // specific to NamedNodeMap
             public override
             {
@@ -1749,11 +1771,11 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 Attr setNamedItem(dom.Node!DOMString arg)
                 {
                     if (arg.ownerDocument !is this.outer.ownerDocument)
-                        throw allocator.multiVersionMake!DOMException(this.outer.outer, dom.ExceptionCode.wrongDocument);
+                        throw new DOMException(dom.ExceptionCode.wrongDocument);//allocator.multiVersionMake!DOMException(this.outer.outer, dom.ExceptionCode.wrongDocument);
 
                     Attr attr = cast(Attr)arg;
                     if (!attr)
-                        throw allocator.multiVersionMake!DOMException(this.outer.outer, dom.ExceptionCode.hierarchyRequest);
+                        throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer.outer, dom.ExceptionCode.hierarchyRequest);
 
                     if (attr._previousAttr)
                         attr._previousAttr._nextSibling = attr._nextAttr;
@@ -1795,7 +1817,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                         return res;
                     }
                     else
-                        throw allocator.multiVersionMake!DOMException(this.outer.outer, dom.ExceptionCode.notFound);
+                        throw new DOMException(dom.ExceptionCode.notFound);//allocator.multiVersionMake!DOMException(this.outer.outer, dom.ExceptionCode.notFound);
                 }
 
                 Attr getNamedItemNS(DOMString namespaceURI, DOMString localName)
@@ -1808,11 +1830,11 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                 Attr setNamedItemNS(dom.Node!DOMString arg)
                 {
                     if (arg.ownerDocument !is this.outer.ownerDocument)
-                        throw allocator.multiVersionMake!DOMException(this.outer.outer, dom.ExceptionCode.wrongDocument);
+                        throw new DOMException(dom.ExceptionCode.wrongDocument);//allocator.multiVersionMake!DOMException(this.outer.outer, dom.ExceptionCode.wrongDocument);
 
                     Attr attr = cast(Attr)arg;
                     if (!attr)
-                        throw allocator.multiVersionMake!DOMException(this.outer.outer, dom.ExceptionCode.hierarchyRequest);
+                        throw new DOMException(dom.ExceptionCode.hierarchyRequest);//allocator.multiVersionMake!DOMException(this.outer.outer, dom.ExceptionCode.hierarchyRequest);
 
                     if (attr._previousAttr)
                         attr._previousAttr._nextSibling = attr._nextAttr;
@@ -1854,7 +1876,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                         return res;
                     }
                     else
-                        throw allocator.multiVersionMake!DOMException(this.outer.outer, dom.ExceptionCode.notFound);
+                        throw new DOMException(dom.ExceptionCode.notFound);//allocator.multiVersionMake!DOMException(this.outer.outer, dom.ExceptionCode.notFound);
                 }
             }
             private
@@ -1883,6 +1905,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     /// Implementation of $(LINK2 ../dom/Text, `std.experimental.xml.dom.Text`)
     class Text: CharacterData, dom.Text!DOMString
     {
+        package this() {
+
+        }
         // specific to Text
         override
         {
@@ -1890,7 +1915,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             Text splitText(size_t offset)
             {
                 if (offset > data.length)
-                    throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.indexSize);
+                    throw new DOMException(dom.ExceptionCode.indexSize);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.indexSize);
                 auto second = ownerDocument.createTextNode(data[offset..$]);
                 data = data[0..offset];
                 if (parentNode)
@@ -1964,8 +1989,8 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                     return null;
                 }
 
-                import std.experimental.xml.appender;
-                auto result = Appender!(typeof(_data[0]), typeof(*allocator))(allocator);
+                //import std.experimental.xml.appender;
+                typeof(_data[0])[] result;//auto result = Appender!(typeof(_data[0]), typeof(*allocator))(allocator);
 
                 Text node, prev = this;
                 do
@@ -2042,12 +2067,10 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                         current = current.parentNode;
 
                     if (!hasOnlyText(current))
-                        throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                      dom.ExceptionCode.noModificationAllowed);
+                        throw new DOMException(dom.ExceptionCode.noModificationAllowed);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
                 }
                 else if (readonly)
-                    throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                  dom.ExceptionCode.noModificationAllowed);
+                    throw new DOMException(dom.ExceptionCode.noModificationAllowed);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
                 else
                     current = this;
 
@@ -2060,8 +2083,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                         if (endsWithText(node))
                         {
                             if (!hasOnlyText(node))
-                                throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                          dom.ExceptionCode.noModificationAllowed);
+                                throw new DOMException(dom.ExceptionCode.noModificationAllowed);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
                         }
                         else break;
                     }
@@ -2079,8 +2101,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                         if (startsWithText(node))
                         {
                             if (!hasOnlyText(node))
-                                throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                          dom.ExceptionCode.noModificationAllowed);
+                                throw new DOMException(dom.ExceptionCode.noModificationAllowed);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
                         }
                         else break;
                     }
@@ -2124,7 +2145,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
 
             Text cloneNode(bool deep)
             {
-                auto cloned = allocator.multiVersionMake!Text(this.outer);
+                auto cloned = new Text();//allocator.multiVersionMake!Text(this.outer);
                 cloned._ownerDocument = _ownerDocument;
                 super.performClone(cloned, deep);
                 return cloned;
@@ -2134,6 +2155,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     /// Implementation of $(LINK2 ../dom/Comment, `std.experimental.xml.dom.Comment`)
     class Comment: CharacterData, dom.Comment!DOMString
     {
+        package this() {
+
+        }
         // inherited from Node
         override
         {
@@ -2142,7 +2166,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
 
             Comment cloneNode(bool deep)
             {
-                auto cloned = allocator.multiVersionMake!Comment(this.outer);
+                auto cloned = new Comment();//allocator.multiVersionMake!Comment(this.outer);
                 cloned._ownerDocument = _ownerDocument;
                 super.performClone(cloned, deep);
                 return cloned;
@@ -2152,6 +2176,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     /// Implementation of $(LINK2 ../dom/DocumentType, `std.experimental.xml.dom.DocumentType`)
     class DocumentType: Node, dom.DocumentType!DOMString
     {
+        package this() {
+
+        }
         // specific to DocumentType
         override
         {
@@ -2194,6 +2221,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     /// Implementation of $(LINK2 ../dom/CDATASection, `std.experimental.xml.dom.CDATASection`)
     class CDATASection: Text, dom.CDATASection!DOMString
     {
+        package this() {
+
+        }
         // inherited from Node
         override
         {
@@ -2202,7 +2232,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
 
             CDATASection cloneNode(bool deep)
             {
-                auto cloned = allocator.multiVersionMake!CDATASection(this.outer);
+                auto cloned = new CDATASection();//allocator.multiVersionMake!CDATASection(this.outer);
                 cloned._ownerDocument = _ownerDocument;
                 super.performClone(cloned, deep);
                 return cloned;
@@ -2212,6 +2242,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     /// Implementation of $(LINK2 ../dom/ProcessingInstruction, `std.experimental.xml.dom.ProcessingInstruction`)
     class ProcessingInstruction: Node, dom.ProcessingInstruction!DOMString
     {
+        package this() {
+
+        }
         // specific to ProcessingInstruction
         override
         {
@@ -2238,8 +2271,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             @property void nodeValue(DOMString newVal)
             {
                 if (readonly)
-                    throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                  dom.ExceptionCode.noModificationAllowed);
+                    throw new DOMException(dom.ExceptionCode.noModificationAllowed);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
                 _data = newVal;
             }
 
@@ -2247,14 +2279,13 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             @property void textContent(DOMString newVal)
             {
                 if (readonly)
-                    throw allocator.multiVersionMake!DOMException(this.outer,
-                                                                  dom.ExceptionCode.noModificationAllowed);
+                    throw new DOMException(dom.ExceptionCode.noModificationAllowed);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.noModificationAllowed);
                 _data = newVal;
             }
 
             ProcessingInstruction cloneNode(bool deep)
             {
-                auto cloned = allocator.multiVersionMake!ProcessingInstruction(this.outer);
+                auto cloned = new ProcessingInstruction();//allocator.multiVersionMake!ProcessingInstruction(this.outer);
                 cloned._ownerDocument = _ownerDocument;
                 super.performClone(cloned, deep);
                 cloned._target = _target;
@@ -2266,6 +2297,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     /// Implementation of $(LINK2 ../dom/EntityReference, `std.experimental.xml.dom.EntityReference`)
     class EntityReference: NodeWithChildren, dom.EntityReference!DOMString
     {
+        package this() {
+
+        }
         // inherited from Node
         override
         {
@@ -2280,7 +2314,9 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
     {
         import std.meta;
         import std.traits;
+        package this() {
 
+        }
         private
         {
             enum string always = "((x) => true)";
@@ -2330,7 +2366,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                         mixin("case getUDAs!(Params." ~ field ~ ", Config)[0].name: assign!(field, type)(value); \n");
                     }
                     default:
-                        throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
+                        throw new DOMException(dom.ExceptionCode.notFound);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
                 }
             }
             /++
@@ -2347,7 +2383,7 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
                                     "return dom.UserData(params." ~ field ~ "); \n");
                     }
                     default:
-                        throw allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
+                        throw new DOMException(dom.ExceptionCode.notFound);//allocator.multiVersionMake!DOMException(this.outer, dom.ExceptionCode.notFound);
                 }
             }
             /++
@@ -2375,12 +2411,15 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
             +/
             @property dom.DOMStringList!string parameterNames()
             {
-                return allocator.multiVersionMake!StringList(this);
+                return new StringList();//allocator.multiVersionMake!StringList(this);
             }
         }
 
         class StringList: dom.DOMStringList!string
         {
+            package this() {
+
+        }
             private template MapToConfigName(Members...)
             {
                 static if (Members.length > 0)
@@ -2414,15 +2453,15 @@ class DOMImplementation(DOMString, Alloc = shared(GCAllocator), ErrorHandler = b
 +/
 auto domBuilder(CursorType)(auto ref CursorType cursor)
 {
-    import stdx.allocator.gc_allocator;
+    //import std.experimental.allocator.gc_allocator;//import stdx.allocator.gc_allocator;
     import dompar = std.experimental.xml.domparser;
-    return dompar.domBuilder(cursor, new DOMImplementation!(CursorType.StringType, shared(GCAllocator))());
+    return dompar.domBuilder(cursor, new DOMImplementation!(CursorType.StringType)());//return dompar.domBuilder(cursor, new DOMImplementation!(CursorType.StringType, shared(GCAllocator))());
 }
 
-unittest
+/* unittest
 {
-    import stdx.allocator.mallocator;
-    auto impl = Mallocator.instance.make!(DOMImplementation!(string, shared(Mallocator)))();
+    //import std.experimental.allocator.mallocator;//import stdx.allocator.mallocator;
+    DOMImplementation!(string) impl = new DOMImplementation!(string); //Mallocator.instance.make!(DOMImplementation!(string))();
 
     auto doc = impl.createDocument("myNamespaceURI", "myPrefix:myRootElement", null);
     auto root = doc.documentElement;
@@ -2481,7 +2520,7 @@ unittest
     assert(root.isEqualNode(root.cloneNode(true)));
     assert(comm.isEqualNode(comm.cloneNode(false)));
     assert(pi.isEqualNode(pi.cloneNode(false)));
-};
+}
 
 unittest
 {
@@ -2552,3 +2591,4 @@ unittest
     assert(titles[1].textContent == "Programming in D");
     assert(titles[1].childNodes.length == 1);
 }
+ */

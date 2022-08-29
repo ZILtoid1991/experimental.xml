@@ -25,16 +25,30 @@ import std.meta : staticIndexOf;
 import std.range.primitives;
 import std.typecons;
 
-/++
-+ Enumeration of non-fatal errors that applications can intercept by setting
-+ an handler on a cursor instance.
-+/
-enum CursorError
-{
-    /// The document does not begin with an XML declaration
-    missingXMLDeclaration,
-    /// The attributes could not be parsed due to invalid syntax
-    invalidAttributeSyntax,
+
+public class CursorException : XMLException {
+    /+@nogc @safe pure nothrow this(CursorError err, string file = __FILE__, size_t line = __LINE__, Throwable nextInChain = null)
+    {
+        string msg;
+        final switch(err) with(CursorError) {
+            case missingXMLDeclaration:
+                msg = "Missing XML declaration!";
+                break;
+            case invalidAttributeSyntax:
+                msg = "Missing XML declaration!";
+                break;
+        }
+        super(msg, file, line, nextInChain);
+    }+/
+    @nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable nextInChain = null)
+    {
+        super(msg, file, line, nextInChain);
+    }
+
+    @nogc @safe pure nothrow this(string msg, Throwable nextInChain, string file = __FILE__, size_t line = __LINE__)
+    {
+        super(msg, file, line, nextInChain);
+    }
 }
 
 package struct Attribute(StringType)
@@ -83,7 +97,8 @@ package struct Attribute(StringType)
 +   All documented methods are implementations of the specifications dictated by
 +   $(LINK2 ../interfaces/isCursor, `isCursor`).
 +/
-struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA, ErrorHandler = void delegate(CursorError))
+struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
+    Flag!"processBadDocument" processBadDocument = No.processBadDocument)
     if (isLowLevelParser!P)
 {
     /++ The type of characters in the input, as returned by the underlying low level parser. +/
@@ -94,10 +109,10 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA, ErrorHa
 
     private P parser;
     private ElementType!P currentNode;
-    private bool starting, _documentEnd = true, nextFailed;
+    private bool starting, _documentEnd = true, nextFailed, _xmlDeclNotFound;
     private ptrdiff_t colon;
     private size_t nameEnd;
-    private ErrorHandler handler;
+    //private ErrorHandler handler;
 
     /++ Generic constructor; forwards its arguments to the parser constructor +/
     this(Args...)(Args args)
@@ -115,17 +130,9 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA, ErrorHa
         }
     }
 
-    private void callHandler(CursorError err)
-    {
-        if (handler != null)
-        {
-            static if (__traits(compiles, handler(err)))
-                handler(err);
-            else
-                handler();
-        }
-        else
-            assert(0);
+    public @property bool xmlDeclNotFound() @nogc @safe pure nothrow
+    {   
+        return _xmlDeclNotFound;
     }
 
     private bool advanceInput()
@@ -142,16 +149,6 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA, ErrorHa
         return false;
     }
 
-    /++
-    +   Overrides the current error handler with a new one.
-    +   It will be called whenever a non-fatal error occurs.
-    +   The default handler abort parsing by throwing an exception.
-    +/
-    void setErrorHandler(ErrorHandler handler)
-    {
-        assert(handler, "Trying to set null error handler");
-        this.handler = handler;
-    }
 
     static if (needSource!P)
     {
@@ -189,9 +186,19 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA, ErrorHa
             else
             {
                 // document without xml declaration???
-                callHandler(CursorError.missingXMLDeclaration);
+                /* static if (processBadDocument == No.processBadDocument)
+                {
+                    throw new CursorException("Missing XML declaration!");//callHandler(CursorError.missingXMLDeclaration);
+                }
+                else
+                {
+                    currentNode.kind = XMLKind.processingInstruction;
+                    currentNode.content = "xml version = \"1.0\"";
+                } */
+                // It turns out XML declaration is not mandatory, just assume UTF-8 and XML version 1.0 if it's missing!
                 currentNode.kind = XMLKind.processingInstruction;
                 currentNode.content = "xml version = \"1.0\"";
+                _xmlDeclNotFound = true;
             }
             starting = true;
             _documentEnd = false;
@@ -417,9 +424,16 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA, ErrorHa
                     if (sep == -1)
                     {
                         // attribute without value???
-                        cursor.callHandler(CursorError.invalidAttributeSyntax);
-                        error = true;
-                        return attr.init;
+                        static if (processBadDocument == No.processBadDocument) 
+                        {
+                            throw new CursorException("Invalid attribute syntax!");
+                        
+                        } 
+                        else 
+                        {
+                            error = true;
+                            return attr.init;
+                        }
                     }
 
                     auto name = content[0..sep];
@@ -430,9 +444,16 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA, ErrorHa
                         if (j != -1)
                         {
                             // attribute name contains spaces???
-                            cursor.callHandler(CursorError.invalidAttributeSyntax);
-                            error = true;
-                            return attr.init;
+                            static if (processBadDocument == No.processBadDocument) 
+                            {
+                                throw new CursorException("Invalid attribute syntax!");
+
+                            } 
+                            else 
+                            {
+                                error = true;
+                                return attr.init;
+                            }
                         }
                         name = name[0..delta];
                     }
@@ -450,25 +471,43 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA, ErrorHa
                             if (delta == -1)
                             {
                                 // attribute quotes never closed???
-                                cursor.callHandler(CursorError.invalidAttributeSyntax);
-                                error = true;
-                                return attr.init;
+                                static if (processBadDocument == No.processBadDocument) 
+                                {
+                                    throw new CursorException("Invalid attribute syntax!");
+                                } 
+                                else 
+                                {
+                                    error = true;
+                                    return attr.init;
+                                }
                             }
                             attEnd = quote + 1 + delta;
                         }
                         else
                         {
-                            cursor.callHandler(CursorError.invalidAttributeSyntax);
-                            error = true;
-                            return attr.init;
+                            static if (processBadDocument == No.processBadDocument) 
+                            {
+                                throw new CursorException("Invalid attribute syntax!");
+                            } 
+                            else 
+                            {
+                                error = true;
+                                return attr.init;
+                            }
                         }
                     }
                     else
                     {
                         // attribute without value???
-                        cursor.callHandler(CursorError.invalidAttributeSyntax);
-                        error = true;
-                        return attr.init;
+                        static if (processBadDocument == No.processBadDocument) 
+                        {
+                            throw new CursorException("Invalid attribute syntax!");
+                        } 
+                        else 
+                        {
+                            error = true;
+                            return attr.init;
+                        }
                     }
                     attr.value = content[(quote + 1)..attEnd];
                     content = content[attEnd+1..$];
@@ -509,7 +548,7 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA, ErrorHa
     }
 }
 
-private void defaultCursorHandler(CursorError err)
+/* private void defaultCursorHandler(CursorError err)
 {
     final switch (err) with (CursorError)
     {
@@ -519,7 +558,7 @@ private void defaultCursorHandler(CursorError err)
             throw new XMLException("Found invalid syntax while parsing attributes");
     }
     assert(0, "This instruction should not be reached; if it happens, please file a bug report");
-}
+} */
 
 /++
 +   Instantiates a specialized `Cursor` with the given underlying `parser` and
@@ -527,17 +566,16 @@ private void defaultCursorHandler(CursorError err)
 +/
 template cursor(Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA)
 {
+    /* auto cursor(T)(auto ref T parser)
+        if(isLowLevelParser!T)
+    {
+        return cursor(parser);
+    } */
     auto cursor(T)(auto ref T parser)
         if(isLowLevelParser!T)
     {
-        return cursor(parser, &defaultCursorHandler);
-    }
-    auto cursor(T, EH)(auto ref T parser, EH errorHandler)
-        if(isLowLevelParser!T)
-    {
-        auto cursor = Cursor!(T, conflateCDATA, EH)();
+        auto cursor = Cursor!(T, conflateCDATA)();
         cursor.parser = parser;
-        cursor.handler = errorHandler;
         if (!cursor.parser.empty)
         {
             cursor.initialize;
@@ -713,7 +751,7 @@ auto children(T)(ref T cursor)
     return XMLRange(&cursor, cursor.enter);
 }
 
-@nogc unittest
+unittest
 {
     import std.experimental.xml.lexers;
     import std.experimental.xml.parser;
@@ -734,12 +772,12 @@ auto children(T)(ref T cursor)
     </aaa>
     };
 
-    import stdx.allocator.mallocator;
+    //import std.experimental.allocator.mallocator;//import stdx.allocator.mallocator;
 
-    auto handler = () { assert(0, "Some problem here..."); };
-    auto lexer = RangeLexer!(string, typeof(handler), shared(Mallocator))(Mallocator.instance);
-    lexer.errorHandler = handler;
-    auto cursor = lexer.parser.cursor!(Yes.conflateCDATA)((){});
+    //auto handler = () { assert(0, "Some problem here..."); };
+    auto lexer = RangeLexer!(string)();
+    
+    auto cursor = lexer.parser.cursor!(Yes.conflateCDATA)();
     assert(cursor.documentEnd);
     cursor.setSource(xml);
 
@@ -839,7 +877,7 @@ auto children(T)(ref T cursor)
 }
 
 import std.traits : isArray;
-import stdx.allocator.gc_allocator;
+import std.experimental.allocator.gc_allocator; //import stdx.allocator.gc_allocator;
 
 /++
 +   A cursor that wraps another cursor, copying all output strings.
@@ -853,12 +891,12 @@ import stdx.allocator.gc_allocator;
 +   This type should not be instantiated directly, but using the helper function
 +   `copyingCursor`.
 +/
-struct CopyingCursor(CursorType, Alloc = shared(GCAllocator), Flag!"intern" intern = No.intern)
+struct CopyingCursor(CursorType, Flag!"intern" intern = No.intern)
     if (isCursor!CursorType && isArray!(CursorType.StringType))
 {
     alias StringType = CursorType.StringType;
 
-    mixin UsesAllocator!Alloc;
+    //mixin UsesAllocator!Alloc;
 
     CursorType cursor;
     alias cursor this;
@@ -880,12 +918,13 @@ struct CopyingCursor(CursorType, Alloc = shared(GCAllocator), Flag!"intern" inte
         }
 
         import std.traits : Unqual;
-        import stdx.allocator;
+        import std.experimental.allocator;//import stdx.allocator;
         import std.range.primitives : ElementEncodingType;
         import core.stdc.string : memcpy;
 
         alias ElemType = ElementEncodingType!StringType;
-        auto cp = cast(ElemType[]) allocator.makeArray!(Unqual!ElemType)(str.length);
+        ElemType[] cp;//auto cp = cast(ElemType[]) allocator.makeArray!(Unqual!ElemType)(str.length);
+        cp.length = str.length;
         memcpy(cast(void*)cp.ptr, cast(void*)str.ptr, str.length * ElemType.sizeof);
 
         static if (intern == Yes.intern)
@@ -942,18 +981,9 @@ struct CopyingCursor(CursorType, Alloc = shared(GCAllocator), Flag!"intern" inte
 /++
 +   Instantiates a suitable `CopyingCursor` on top of the given `cursor` and allocator.
 +/
-auto copyingCursor(Flag!"intern" intern = No.intern, CursorType, Alloc)(auto ref CursorType cursor, ref Alloc alloc)
+auto copyingCursor(Flag!"intern" intern = No.intern, CursorType)(auto ref CursorType cursor)
 {
-    auto res = CopyingCursor!(CursorType, Alloc, intern)(alloc);
-    res.cursor = cursor;
-    return res;
-}
-/// ditto
-auto copyingCursor(Alloc = shared(GCAllocator), Flag!"intern" intern = No.intern, CursorType)
-                  (auto ref CursorType cursor)
-    if (is(typeof(Alloc.instance)))
-{
-    auto res = CopyingCursor!(CursorType, Alloc, intern)(Alloc.instance);
+    auto res = CopyingCursor!(CursorType, intern)();
     res.cursor = cursor;
     return res;
 }
@@ -962,7 +992,7 @@ unittest
 {
     import std.experimental.xml.lexers;
     import std.experimental.xml.parser;
-    import stdx.allocator.mallocator;
+    
 
     wstring xml = q{
     <?xml encoding = "utf-8" ?>
@@ -980,7 +1010,7 @@ unittest
         .lexer
         .parser
         .cursor!(Yes.conflateCDATA)
-        .copyingCursor!(Yes.intern)(Mallocator.instance);
+        .copyingCursor!(Yes.intern)();
 
     assert(cursor.enter);
     auto a1 = cursor.name;

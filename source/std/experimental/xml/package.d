@@ -265,7 +265,7 @@ public import std.experimental.xml.faststrings;
 
 public import dom = std.experimental.xml.dom;
 
-@nogc unittest
+/* @nogc unittest
 {
     import std.typecons : Yes, No;
 
@@ -290,4 +290,4 @@ public import dom = std.experimental.xml.dom;
         .checkXMLNames;
 
     assert(cursor.kind == XMLKind.document);
-}
+} */

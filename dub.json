@@ -6,9 +6,7 @@
     "targetType": "library",
     "license": "BSL-1.0",
     "excludedSourceFiles": ["source/benchmark.d", "source/test.d", "source/random_benchmark/*"],
-    "dependencies": {
-        "stdx-allocator": "~>2.77.2"
-    },
+ 
     "configurations":
     [
         {
