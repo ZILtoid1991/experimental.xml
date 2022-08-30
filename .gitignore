@@ -14,3 +14,4 @@ std-experimental-xml-test-library
 *.exe
 *.app
 *.out
+*.pdb

@@ -53,11 +53,14 @@ public class ParserException : XMLException {
 +       element content whitespace (i.e. the whitespace that separates tags), but will
 +       report it as text
 +/
-struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhitespace)
+struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhitespace,
+    Flag!"processBadDocument" processBadDocument = No.processBadDocument)
     if (isLexer!L)
 {
     import std.meta : staticIndexOf;
 
+    alias CharacterType = L.CharacterType;
+    alias StringType = CharacterType[];
     /++
     +   The structure returned in output from the low level parser.
     +   Represents an XML token, delimited by specific patterns, based on its kind.
@@ -66,7 +69,7 @@ struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhite
     struct XMLToken
     {
         /++ The content of the token, delimiters excluded +/
-        L.CharacterType[] content;
+        CharacterType[] content;
 
         /++ Represents the kind of token +/
         XMLKind kind;
@@ -75,20 +78,23 @@ struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhite
     private L lexer;
     private bool ready, insideDTD;
     private XMLToken next;
+    private StringType[StringType] _chrEntities;
 
     //mixin UsesErrorHandler!ErrorHandler;
 
     this(L lexer) {
         this.lexer = lexer;
+        _chrEntities = xmlPredefinedEntities!CharacterType();
     }
     /++ Generic constructor; forwards its arguments to the lexer constructor +/
     this(Args...)(Args args)
     {
         lexer = L(args);
+        _chrEntities = xmlPredefinedEntities!CharacterType();
     }
-
-    alias CharacterType = L.CharacterType;
-
+    @property StringType[StringType] chrEntities() @safe pure nothrow {
+        return _chrEntities;
+    }
     static if (needSource!L)
     {
         alias InputType = L.InputType;
@@ -100,6 +106,7 @@ struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhite
         void setSource(InputType input)
         {
             lexer.setSource(input);
+            _chrEntities = xmlPredefinedEntities!CharacterType();
             ready = false;
             insideDTD = false;
         }
@@ -174,7 +181,10 @@ struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhite
         {
             lexer.advanceUntil('<', false);
             next.kind = XMLKind.text;
-            next.content = fetchContent();
+            static if (processBadDocument == No.processBadDocument)
+                next.content = xmlUnescape(fetchContent(), _chrEntities);
+            else
+                next.content = xmlUnescape!No.strict(fetchContent(), _chrEntities);
         }
 
         // tag end

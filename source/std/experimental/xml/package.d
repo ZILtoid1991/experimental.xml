@@ -265,7 +265,7 @@ public import std.experimental.xml.faststrings;
 
 public import dom = std.experimental.xml.dom;
 
-/* @nogc unittest
+unittest
 {
     import std.typecons : Yes, No;
 
@@ -284,10 +284,10 @@ public import dom = std.experimental.xml.dom;
 
     auto cursor =
          xml
-        .lexer((){})
+        .lexer()
         .parser!(No.preserveWhitespace)
-        .cursor!(Yes.conflateCDATA)((){})
+        .cursor!(Yes.conflateCDATA)()
         .checkXMLNames;
 
     assert(cursor.kind == XMLKind.document);
-} */
+}

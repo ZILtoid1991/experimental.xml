@@ -21,6 +21,8 @@ module std.experimental.xml.cursor;
 import std.experimental.xml.interfaces;
 import std.experimental.xml.faststrings;
 
+import std.experimental.xml.validation;
+
 import std.meta : staticIndexOf;
 import std.range.primitives;
 import std.typecons;
@@ -86,6 +88,9 @@ package struct Attribute(StringType)
             return name[colon+1..$];
         else
             return name;
+    }
+    StringType toString() {
+        return name ~ " = \"" ~ value ~ "\"";
     }
 }
 
@@ -172,6 +177,7 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
     {
         // reset private fields
         nextFailed = false;
+        _xmlDeclNotFound = false;
         colon = colon.max;
         nameEnd = 0;
 
@@ -427,8 +433,7 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
                         static if (processBadDocument == No.processBadDocument) 
                         {
                             throw new CursorException("Invalid attribute syntax!");
-                        
-                        } 
+                        }
                         else 
                         {
                             error = true;
@@ -437,6 +442,18 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
                     }
 
                     auto name = content[0..sep];
+                    if (!isValidXMLName(name)) 
+                    {
+                        static if (processBadDocument == No.processBadDocument)
+                        {
+                            throw new CursorException("Invalid attribute name!");
+                        }
+                        else 
+                        {
+                            error = true;
+                        }
+                    }
+                    
                     auto delta = fastIndexOfAny(name, " \r\n\t");
                     if (delta >= 0)
                     {
@@ -447,7 +464,6 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
                             static if (processBadDocument == No.processBadDocument) 
                             {
                                 throw new CursorException("Invalid attribute syntax!");
-
                             } 
                             else 
                             {
@@ -509,7 +525,11 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
                             return attr.init;
                         }
                     }
-                    attr.value = content[(quote + 1)..attEnd];
+                    //attr.value = content[(quote + 1)..attEnd];
+                    static if (processBadDocument == No.processBadDocument) 
+                        attr.value = xmlUnescape(content[(quote + 1)..attEnd], cursor.parser.chrEntities());
+                    else
+                        attr.value = xmlUnescape!No.strict(content[(quote + 1)..attEnd], cursor.parser.chrEntities());
                     content = content[attEnd+1..$];
                 }
                 return attr;
@@ -547,18 +567,6 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
         return currentNode.content;
     }
 }
-
-/* private void defaultCursorHandler(CursorError err)
-{
-    final switch (err) with (CursorError)
-    {
-        case missingXMLDeclaration:
-            throw new XMLException("XML document does not start with an XML declaration");
-        case invalidAttributeSyntax:
-            throw new XMLException("Found invalid syntax while parsing attributes");
-    }
-    assert(0, "This instruction should not be reached; if it happens, please file a bug report");
-} */
 
 /++
 +   Instantiates a specialized `Cursor` with the given underlying `parser` and
@@ -758,6 +766,8 @@ unittest
     import std.string : lineSplitter, strip;
     import std.algorithm : map, equal;
     import std.array : array;
+    import std.exception : assertThrown;
+    import std.stdio;
 
     string xml = q{
     <?xml encoding = "utf-8" ?>
@@ -770,6 +780,12 @@ unittest
         <![CDATA[ Ciaone! ]]>
         <ccc/>
     </aaa>
+    };
+    string xml_bad = q{
+        <?xml encoding = "utf-8" ?>
+        <AAA>
+            <BBB attr = "this should fail &#xFFFFFFFFFF;" />
+        </AAA>
     };
 
     //import std.experimental.allocator.mallocator;//import stdx.allocator.mallocator;
@@ -874,6 +890,11 @@ unittest
     }
 
     assert(cursor.documentEnd());
+    /* assertThrown!XMLException({
+        cursor.setSource(xml_bad);
+        auto range1 = cursor.children.front.children.front.attributes;
+        writeln(range1.front);
+    }); */
 }
 
 import std.traits : isArray;

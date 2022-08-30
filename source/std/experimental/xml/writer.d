@@ -983,7 +983,7 @@ template withValidation(alias validationFun, Params...)
     }
 }
 
-/* unittest
+unittest
 {
     import std.array : Appender;
     import std.experimental.xml.validation;
@@ -1008,4 +1008,3 @@ template withValidation(alias validationFun, Params...)
     writer.closeElement("aabb");
     assert(count == 2);
 }
- */

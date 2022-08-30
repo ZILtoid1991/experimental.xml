@@ -237,6 +237,14 @@ pure nothrow @nogc @safe bool isValidXMLNameChar(dchar c)
         || (0x203F <= c && c <= 2040);
 }
 
+pure nothrow @nogc @safe bool isValidXMLName(T)(T[] input) {
+    if (!input.length) return false;
+    if (!isValidXMLNameStart(input[0])) return false;
+    for (sizediff_t i = 1 ; i < input.length; i++)
+        if (!isValidXMLNameChar(input[i])) return false;
+    return true;
+}
+
 /**
 *   Checks whether a character can appear in an XML public ID.
 */
@@ -320,7 +328,7 @@ auto checkXMLNames(CursorType, InvalidTagHandler, InvalidAttrHandler)
     return res;
 }
 
-/* unittest
+unittest
 {
     import std.experimental.xml.lexers;
     import std.experimental.xml.parser;
@@ -364,4 +372,8 @@ auto checkXMLNames(CursorType, InvalidTagHandler, InvalidAttrHandler)
     inspectOneLevel(cursor);
 
     assert(count == 3);
-} */
+
+    assert(isValidXMLName("foo"));
+    assert(isValidXMLName("bar"));
+    assert(!isValidXMLName(".foo"));
+}
