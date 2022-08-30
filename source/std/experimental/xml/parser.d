@@ -28,7 +28,7 @@ import std.experimental.xml.faststrings;
 
 import std.typecons : Flag, Yes, No;
 
-public class ParserException : Exception {
+public class ParserException : XMLException {
     @nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable nextInChain = null)
     {
         super(msg, file, line, nextInChain);
