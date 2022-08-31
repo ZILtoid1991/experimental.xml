@@ -286,8 +286,7 @@ unittest
          xml
         .lexer()
         .parser!(No.preserveWhitespace)
-        .cursor!(Yes.conflateCDATA)()
-        .checkXMLNames;
+        .cursor!(Yes.conflateCDATA)();
 
     assert(cursor.kind == XMLKind.document);
 }

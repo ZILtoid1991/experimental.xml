@@ -117,7 +117,8 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
     private bool starting, _documentEnd = true, nextFailed, _xmlDeclNotFound;
     private ptrdiff_t colon;
     private size_t nameEnd;
-    //private ErrorHandler handler;
+    ///Loads system entities if needed.
+    public StringType delegate(StringType path) sysEntityLoader;
 
     /++ Generic constructor; forwards its arguments to the parser constructor +/
     this(Args...)(Args args)
@@ -280,7 +281,75 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
             return false;
         else if (currentNode.kind == XMLKind.dtdStart)
         {
-            while (advanceInput && currentNode.kind != XMLKind.dtdEnd) {}
+            while (advanceInput && currentNode.kind != XMLKind.dtdEnd) 
+            { // Process DTD here!
+                switch (currentNode.kind) {
+                    case XMLKind.entityDecl:
+                        sizediff_t entityLen = fastIndexOf(currentNode.content, ' ');
+                        static if (processBadDocument == No.processBadDocument)
+                        {
+                            if (entityLen < 0)
+                                throw new CursorException("Character entity name not found!");
+                        }
+                        else 
+                        {
+                            if (entityLen < 0)
+                                continue;
+                        }
+                        StringType name = currentNode.content[0..entityLen];
+                        if (entityLen + 2 > currentNode.content.length)
+                        {
+                            bool isSysEntity;
+                            if (currentNode.content[entityLen + 2] == 'S')
+                            {
+                                if (currentNode.content[entityLen + 3..entityLen + 8] == "YSTEM")
+                                    isSysEntity = true;
+                            }
+                            
+                            sizediff_t entBegin = fastIndexOfAny(currentNode.content[entityLen + 1..$], "\"\'");
+                            static if (processBadDocument == No.processBadDocument)
+                            {
+                                if (entBegin < 0)
+                                    throw new CursorException("Character entity content not found!");
+                            }
+                            else 
+                            {
+                                if (entBegin < 0)
+                                    continue;
+                            }
+                            entBegin += entityLen;
+                            CharacterType quot = currentNode.content[entBegin];
+                            sizediff_t entEnd = fastIndexOf(currentNode.content[entBegin + 1..$], quot);
+                            static if (processBadDocument == No.processBadDocument)
+                            {
+                                if (entEnd < 0)
+                                    throw new CursorException("Character entity content wasn't ended!");
+                            }
+                            else 
+                            {
+                                if (entEnd < 0)
+                                    continue;
+                            }
+                            entEnd += entBegin;
+                            if (!isSysEntity)
+                                parser._chrEntities[name] = currentNode.content[entBegin + 1..entEnd - 1];
+                            else if (sysEntityLoader !is null)
+                                parser._chrEntities[name] = sysEntityLoader(currentNode.content[entBegin + 1..entEnd - 1]);
+                        } else {
+                            static if (processBadDocument == No.processBadDocument)
+                            {
+                                throw new CursorException("Character entity content not found!");
+                            }
+                            else 
+                            {
+                                parser._chrEntities[name] = "";
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
         }
         else if (currentNode.kind == XMLKind.elementStart)
         {
@@ -442,17 +511,7 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
                     }
 
                     auto name = content[0..sep];
-                    if (!isValidXMLName(name)) 
-                    {
-                        static if (processBadDocument == No.processBadDocument)
-                        {
-                            throw new CursorException("Invalid attribute name!");
-                        }
-                        else 
-                        {
-                            error = true;
-                        }
-                    }
+                    
                     
                     auto delta = fastIndexOfAny(name, " \r\n\t");
                     if (delta >= 0)
@@ -472,6 +531,17 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
                             }
                         }
                         name = name[0..delta];
+                    }
+                    if (!isValidXMLName(name)) 
+                    {
+                        static if (processBadDocument == No.processBadDocument)
+                        {
+                            throw new CursorException("Invalid attribute name!");
+                        }
+                        else 
+                        {
+                            error = true;
+                        }
                     }
                     attr.name = name;
 

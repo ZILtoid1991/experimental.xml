@@ -25,6 +25,7 @@ module std.experimental.xml.parser;
 
 import std.experimental.xml.interfaces;
 import std.experimental.xml.faststrings;
+import std.experimental.xml.validation;
 
 import std.typecons : Flag, Yes, No;
 
@@ -47,14 +48,18 @@ public class ParserException : XMLException {
 +
 +   Params:
 +       L = the underlying lexer type
-+       ErrorHandler = a delegate type, used to report the impossibility to parse
-+                      the file due to syntax errors
-+       preserveWhitespace = if set to `Yes` (default is `No`), the parser will not remove
-+       element content whitespace (i.e. the whitespace that separates tags), but will
-+       report it as text
++       preserveWhitespace = if set to `Yes` (default is `No`), the parser will not remove element content whitespace 
++   (i.e. the whitespace that separates tags), but will report it as text.
++       processBadDocument = if set to `Yes` (default is `No`), the parser will try to parse any and all badly formed
++   document as long as it can be processed.
++       testTextValidity = if set to `Yes` (which is default), then the parser will test for invalid characters, and 
++   will throw an exception on errors. Turning it off can speed up parsing.
++       processEntityElements = if set to `Yes` (which is default), then elements within character entities will be
++   processed, otherwise they'll be treated as just text. Turning it off can speed up parsing.
 +/
 struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhitespace,
-    Flag!"processBadDocument" processBadDocument = No.processBadDocument)
+    Flag!"processBadDocument" processBadDocument = No.processBadDocument, 
+    Flag!"testTextValidity" testTextValidity = Yes.testTextValidity)
     if (isLexer!L)
 {
     import std.meta : staticIndexOf;
@@ -77,8 +82,9 @@ struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhite
 
     private L lexer;
     private bool ready, insideDTD;
+    public XMLVersion xmlVersion;
     private XMLToken next;
-    private StringType[StringType] _chrEntities;
+    package StringType[StringType] _chrEntities;
 
     //mixin UsesErrorHandler!ErrorHandler;
 
@@ -185,6 +191,19 @@ struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhite
                 next.content = xmlUnescape(fetchContent(), _chrEntities);
             else
                 next.content = xmlUnescape!No.strict(fetchContent(), _chrEntities);
+            static if (testTextValidity == Yes.testTextValidity)
+            {
+                if (xmlVersion == XMLVersion.XML1_0)
+                {
+                    if (!isValidXMLText10(next.content))
+                        throw new ParserException("Text contains invalid characters!");
+                }
+                else
+                {
+                    if (!isValidXMLText11(next.content))
+                        throw new ParserException("Text contains invalid characters!");
+                }
+            }
         }
 
         // tag end

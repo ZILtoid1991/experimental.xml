@@ -536,50 +536,7 @@ class XMLException : Exception
     }
 }
 
-// PRIVATE STUFF
-
-/* package mixin template UsesAllocator(Alloc, bool genDefaultCtor = false)
-{
-    static if (is(Alloc == class))
-        private alias TrueAlloc = Alloc;
-    else
-        private alias TrueAlloc = Alloc*;
-
-    static if (is(typeof(Alloc.instance) == Alloc))
-    {
-        static if (is(Alloc == class))
-            private TrueAlloc allocator = Alloc.instance;
-        else
-            private TrueAlloc allocator = &(Alloc.instance);
-
-        static if (genDefaultCtor)
-            this() {}
-    }
-    else
-    {
-        private TrueAlloc allocator;
-        @disable this();
-    }
-
-    this(TrueAlloc allocator)
-    {
-        this.allocator = allocator;
-    }
-
-    static if (!is(Alloc == class))
-        this(ref Alloc allocator)
-        {
-            this.allocator = &allocator;
-        }
+enum XMLVersion {
+    XML1_0,
+    XML1_1,
 }
-
-package mixin template UsesErrorHandler(ErrorHandler)
-{
-    private ErrorHandler handler;
-    @property auto errorHandler() { return &handler; }
-    @property void errorHandler(ErrorHandler eh)
-    {
-        assert(eh, "Null errorHandler on setting");
-        handler = eh;
-    }
-} */

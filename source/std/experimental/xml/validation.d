@@ -24,165 +24,6 @@ module std.experimental.xml.validation;
 import std.experimental.xml.interfaces;
 
 /**
-*   Wrapper around a cursor that checks whether elements are correctly nested.
-*
-*   It will call `ErrorHandler` whenever it finds a closing tag that does not match
-*   the last start tag. `ErrorHandler` will be called with the first matching tuple
-*   from the following:
-*   $(UL
-*       $(LI `(CursorType, std.container.Array!(CursorType.StringType))`)
-*       $(LI `(CursorType)`)
-*       $(LI `(std.container.Array!(CursorType.StringType))`)
-*       $(LI `()`)
-*   )
-*   Any of these parameters can be taken by `ref`. The second parameter, of type
-*   `std.container.Array!(CursorType.StringType)` represents the stack of currently
-*   open tags. The handler is free to modify it (to implement erro recovery with
-*   automatic XML fixing).
-*
-*   This type should not be instantiated directly, but with the helper function
-*   `elementNestingValidator`.
-*/
-struct ElementNestingValidator(CursorType)
-    if (isCursor!CursorType)
-{
-    import std.experimental.xml.interfaces;
-
-    alias StringType = CursorType.StringType;
-
-    import std.container.array;
-    private Array!StringType stack;
-
-    CursorType cursor;
-    alias cursor this;
-
-    this(Args...)(Args args)
-    {
-        cursor = CursorType(args);
-    }
-
-    /* private void callHandler()
-    {
-        static if (__traits(compiles, ErrorHandler(cursor, stack)))
-            ErrorHandler(cursor, stack);
-        else static if (__traits(compiles, ErrorHandler(cursor)))
-            ErrorHandler(cursor);
-        else static if (__traits(compiles, ErrorHandler(stack)))
-            ErrorHandler(stack);
-        else
-            ErrorHandler();
-    } */
-
-    bool enter()
-    {
-        if (cursor.kind == XMLKind.elementStart)
-        {
-            stack.insertBack(cursor.name);
-            if (!cursor.enter)
-            {
-                stack.removeBack;
-                return false;
-            }
-            return true;
-        }
-        return cursor.enter;
-    }
-    void exit()
-    {
-        cursor.exit();
-        if (cursor.kind == XMLKind.elementEnd)
-        {
-            if (stack.empty)
-            {
-                if (!cursor.documentEnd)
-                    throw new XMLException("Document end not found!");//callHandler();
-            }
-            else
-            {
-                import std.experimental.xml.faststrings : fastEqual;
-
-                if (!fastEqual(stack.back, cursor.name))
-                {
-                    throw new XMLException("Closing pair of element not found!");//callHandler();
-                }
-                else
-                    stack.removeBack();
-            }
-        }
-    }
-}
-/**
-*   Instantiates an `ElementNestingValidator` with the given `cursor` and `ErrorHandler`
-*/
-auto elementNestingValidator(CursorType) (auto ref CursorType cursor)
-{
-    auto res = ElementNestingValidator!(CursorType)();
-    res.cursor = cursor;
-    return res;
-}
-
-/* unittest
-{
-    import std.experimental.xml.lexers;
-    import std.experimental.xml.parser;
-    import std.experimental.xml.cursor;
-
-    auto xml = q{
-        <?xml?>
-        <aaa>
-            <eee>
-                <bbb>
-                    <ccc>
-                </bbb>
-                <ddd>
-                </ddd>
-            </eee>
-            <fff>
-            </fff>
-        </aaa>
-    };
-
-    int count = 0;
-
-    auto validator =
-         xml
-        .lexer
-        .parser
-        .cursor
-        .elementNestingValidator!(
-            (ref cursor, ref stack)
-            {
-                import std.algorithm: canFind;
-                count++;
-                if (canFind(stack[], cursor.name()))
-                    do
-                    {
-                        stack.removeBack();
-                    }
-                    while (stack.back != cursor.name());
-                stack.removeBack();
-            });
-
-    validator.setSource(xml);
-
-    void inspectOneLevel(T)(ref T cursor)
-    {
-        do
-        {
-            if (cursor.enter)
-            {
-                inspectOneLevel(cursor);
-                cursor.exit();
-            }
-        }
-        while (cursor.next());
-    }
-    inspectOneLevel(validator);
-
-    assert(count == 1);
-} */
-
-/**
 *   Checks whether a character can appear in an XML 1.0 document.
 */
 pure nothrow @nogc @safe bool isValidXMLCharacter10(dchar c)
@@ -201,6 +42,34 @@ pure nothrow @nogc @safe bool isValidXMLCharacter11(dchar c)
     return (1 <= c && c <= 0xD7FF)
         || (0xE000 <= c && c <= 0xFFFD)
         || (0x10000 <= c && c <= 0x10FFFF);
+}
+/** 
+ * Checks whether a text contains invalid characters for an XML 1.0 document.
+ * Params:
+ *   input = The text to test for.
+ * Returns: true if text doesn't contain any invalid characters.
+ */
+pure nothrow @nogc @safe bool isValidXMLText10(T)(T[] input)
+{
+    foreach (elem; input) 
+    {
+        if (!isValidXMLCharacter10(elem)) return false;
+    }
+    return true;
+}
+/** 
+ * Checks whether a text contains invalid characters for an XML 1.1 document.
+ * Params:
+ *   input = The text to test for.
+ * Returns: true if text doesn't contain any invalid characters.
+ */
+pure nothrow @nogc @safe bool isValidXMLText11(T)(T[] input)
+{
+    foreach (elem; input) 
+    {
+        if (!isValidXMLCharacter11(elem)) return false;
+    }
+    return true;
 }
 
 /**
@@ -237,6 +106,12 @@ pure nothrow @nogc @safe bool isValidXMLNameChar(dchar c)
         || (0x203F <= c && c <= 2040);
 }
 
+/** 
+ * Checks whether a name is a valid XML name or not.
+ * Params:
+ *   input = The input string.
+ * Returns: True if XML name is valid.
+ */
 pure nothrow @nogc @safe bool isValidXMLName(T)(T[] input) {
     if (!input.length) return false;
     if (!isValidXMLNameStart(input[0])) return false;
@@ -260,120 +135,10 @@ pure nothrow @nogc @safe bool isValidXMLPublicIdCharacter(dchar c)
         || "-'()+,./:=?;!*#@$_%".indexOf(c) != -1;
 }
 
-/**
-*   Wrapper around a cursor that checks whether tag names and attribute names
-*   are well-formed with respect to the specification.
-*
-*   Will call `InvalidTagHandler` every time it encounters an ill-formed tag name
-*   and `InvalidAttrHandler` every time it encounters an ill-formed attribute name.
-*
-*   This type should not be instantiated directly, but with the helper function
-*   `checkXMLNames`.
-*/
-struct CheckXMLNames(CursorType, InvalidTagHandler, InvalidAttrHandler)
-    if (isCursor!CursorType)
-{
-    alias StringType = CursorType.StringType;
-    InvalidTagHandler onInvalidTagName;
-    InvalidAttrHandler onInvalidAttrName;
-
-    CursorType cursor;
-    alias cursor this;
-
-    auto name()
-    {
-        import std.algorithm : all;
-
-        auto name = cursor.name;
-        if (cursor.kind != XMLKind.elementEnd)
-            if (!name[0].isValidXMLNameStart || !name.all!isValidXMLNameChar)
-                onInvalidTagName(name);
-        return name;
-    }
-
-    auto attributes()
-    {
-        struct CheckedAttributes
-        {
-            typeof(onInvalidAttrName) callback;
-            typeof(cursor.attributes()) attrs;
-            alias attrs this;
-
-            auto front()
-            {
-                import std.algorithm : all;
-                auto attr = attrs.front;
-                if (!attr.name[0].isValidXMLNameStart || !attr.name.all!isValidXMLNameChar)
-                    callback(attr.name);
-                return attr;
-            }
-        }
-        return CheckedAttributes(onInvalidAttrName, cursor.attributes);
-    }
-}
-
-/**
-*   Returns an instance of `CheckXMLNames` specialized for the given `cursor`,
-*   with the given error handlers;
-*/
-auto checkXMLNames(CursorType, InvalidTagHandler, InvalidAttrHandler)
-                  (auto ref CursorType cursor,
-                   InvalidTagHandler tagHandler = (CursorType.StringType s) {},
-                   InvalidAttrHandler attrHandler = (CursorType.StringType s) {})
-{
-    auto res = CheckXMLNames!(CursorType, InvalidTagHandler, InvalidAttrHandler)();
-    res.cursor = cursor;
-    res.onInvalidTagName = tagHandler;
-    res.onInvalidAttrName = attrHandler;
-    return res;
-}
-
 unittest
 {
-    import std.experimental.xml.lexers;
-    import std.experimental.xml.parser;
-    import std.experimental.xml.cursor;
-
-    auto xml = q{
-        <?xml?>
-        <aa.a at;t = "hi!">
-            <bbb>
-                <-ccc>
-            </bbb>
-            <dd-d xmlns:,="http://foo.bar/baz">
-            </dd-d>
-        </aa.a>
-    };
-
-    int count = 0;
-
-    auto cursor =
-         xml
-        .lexer
-        .parser
-        .cursor
-        .checkXMLNames((string s) { count++; }, (string s) { count++; });
-
-    void inspectOneLevel(T)(ref T cursor)
-    {
-        import std.array;
-        do
-        {
-            auto name = cursor.name;
-            auto attrs = cursor.attributes.array;
-            if (cursor.enter)
-            {
-                inspectOneLevel(cursor);
-                cursor.exit();
-            }
-        }
-        while (cursor.next);
-    }
-    inspectOneLevel(cursor);
-
-    assert(count == 3);
-
     assert(isValidXMLName("foo"));
     assert(isValidXMLName("bar"));
     assert(!isValidXMLName(".foo"));
+    assert(isValidXMLName("foo:bar"));
 }

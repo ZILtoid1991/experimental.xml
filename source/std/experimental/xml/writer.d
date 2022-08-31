@@ -989,12 +989,11 @@ unittest
     import std.experimental.xml.validation;
     import std.typecons : refCounted;
 
-    int count = 0;
+    
 
     auto app = Appender!string().refCounted;
     auto writer =
-         Writer!(string, typeof(app), PrettyPrinters.Indenter)()
-        .withValidation!checkXMLNames((string s) { count++; }, (string s) { count++; });
+         Writer!(string, typeof(app), PrettyPrinters.Indenter)();
     writer.setSink(app);
 
     writer.writeXMLDeclaration(10, "utf-8", false);
@@ -1006,5 +1005,4 @@ unittest
     writer.writeText("a nice text");
     writer.writeCDATA("a nice cdata");
     writer.closeElement("aabb");
-    assert(count == 2);
 }
