@@ -101,6 +101,12 @@ package struct Attribute(StringType)
 +   another cursor), so it is part of virtually every parsing chain.
 +   All documented methods are implementations of the specifications dictated by
 +   $(LINK2 ../interfaces/isCursor, `isCursor`).
++   Parameters:
++       P = The parser.
++       conflateCData = 
++       processBadDocument = If set to `Yes` (default is `No`), then it'll ignore errors
++   as long as it can still process the document. Otherwise it'll throw an appropriate
++   exception if an error is encountered.
 +/
 struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
     Flag!"processBadDocument" processBadDocument = No.processBadDocument)
@@ -118,6 +124,8 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
     private ptrdiff_t colon;
     private size_t nameEnd;
     ///Loads system entities if needed.
+    ///If not used, then it can protect against certain system entity attacks at the
+    ///cost of having this feature disabled.
     public StringType delegate(StringType path) sysEntityLoader;
 
     /++ Generic constructor; forwards its arguments to the parser constructor +/
