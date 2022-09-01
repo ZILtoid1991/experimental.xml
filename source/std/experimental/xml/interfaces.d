@@ -536,6 +536,9 @@ class XMLException : Exception
     }
 }
 
+/** 
+ * Defines the document's XML version.
+ */
 enum XMLVersion {
     XML1_0,
     XML1_1,

@@ -142,3 +142,39 @@ unittest
     assert(!isValidXMLName(".foo"));
     assert(isValidXMLName("foo:bar"));
 }
+
+/** 
+ * A simple document validation stack.
+ * Node names on every non-empty starting nodes are pushed here, then on every ending node the top is popped then 
+ * compared with the name.
+ */
+struct ValidationStack(StringType)
+{
+    StringType[] stack;
+    /** 
+     * Pushes a name to the top.
+     */
+    void push(StringType input) @safe pure nothrow
+    {
+        stack ~= input;
+    }
+    /** 
+     * Pops a name from the top, then compared with the input.
+     * Params:
+     *   input = the string that is being compared with the input.
+     * Returns: True if a string could been removed from the stack and it's identical with the input, false otherwise.
+     */
+    bool pop(StringType input) @safe pure nothrow
+    {
+        if (stack.length)
+        {
+            StringType top = stack[$-1];
+            stack = stack[0..$-1];
+            return top == input;
+        }
+        else 
+        {
+            return false;
+        }
+    }
+}

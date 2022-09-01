@@ -19,7 +19,7 @@ import std.experimental.xml.interfaces : XMLException;
 /** 
  * Compares two strings, and returns true if they're both equal. Both input must be of equal lengths.
  */
-package bool fastEqual(T, S)(T[] t, S[] s) pure @nogc nothrow
+package bool fastEqual(T, S)(T[] t, S[] s) pure @nogc nothrow @trusted
 in
 {
     assert(t.length == s.length);
@@ -83,13 +83,14 @@ unittest
 + Returns the index of the first occurrence of any of the values in the second
 + slice inside the first one.
 +/
-package ptrdiff_t fastIndexOfAny(T, S)(T[] t, S[] s) pure @nogc nothrow
+package ptrdiff_t fastIndexOfAny(T, S)(T[] t, S[] s) pure @nogc nothrow @safe
 {
     foreach (i; 0 .. t.length)
         if (fastIndexOf(s, t[i]) != -1)
             return i;
     return -1;
 }
+
 unittest
 {
     assert(fastIndexOfAny([1, 2, 3, 4], [5, 4, 3]) == 2);
@@ -112,8 +113,29 @@ unittest
     assert(fastIndexOfNeither("lulublubla", "luck") == 4);
     assert(fastIndexOfNeither([1, 3, 2], [2, 3, 1]) == -1);
 }
-
-import std.experimental.allocator.gc_allocator;//import stdx.allocator.gc_allocator;
+package bool checkStringBeforeChr(T, S)(T[] haysack, S[] needle, S before) @nogc @safe pure nothrow
+{
+    for (sizediff_t i ; i < haysack.length ; i++) {
+        if (haysack[i] == needle[0])
+        {
+            if (cast(sizediff_t)(haysack.length) - i > needle.length) 
+            {
+                return fastEqual(haysack[i..i + needle.length], needle);
+            }
+            else
+                return false;
+        }
+        else if (haysack[i] == before)
+            return false;
+    }
+    return false;
+}
+unittest 
+{
+    assert(checkStringBeforeChr("extentity SYSTEM \"someexternalentity.file\"", "SYSTEM", '"'));
+    assert(!checkStringBeforeChr("extentity SYST", "SYSTEM", '"'));
+    assert(!checkStringBeforeChr("intentity \"Some internal entity\"", "SYSTEM", '"'));
+}
 
 /++
 +   Returns a copy of the input string, after escaping all XML reserved characters.

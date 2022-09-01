@@ -8,6 +8,7 @@
 /++
 +   Authors:
 +   Lodovico Giaretta
++   László Szerémi
 +
 +   License:
 +   <a href="http://www.boost.org/LICENSE_1_0.txt">Boost License 1.0</a>.
@@ -29,19 +30,6 @@ import std.typecons;
 
 
 public class CursorException : XMLException {
-    /+@nogc @safe pure nothrow this(CursorError err, string file = __FILE__, size_t line = __LINE__, Throwable nextInChain = null)
-    {
-        string msg;
-        final switch(err) with(CursorError) {
-            case missingXMLDeclaration:
-                msg = "Missing XML declaration!";
-                break;
-            case invalidAttributeSyntax:
-                msg = "Missing XML declaration!";
-                break;
-        }
-        super(msg, file, line, nextInChain);
-    }+/
     @nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable nextInChain = null)
     {
         super(msg, file, line, nextInChain);
@@ -97,16 +85,14 @@ package struct Attribute(StringType)
 /++
 +   An implementation of the $(LINK2 ../interfaces/isCursor, `isCursor`) trait.
 +
-+   This is the only provided cursor that builds on top of a parser (and not on top of
-+   another cursor), so it is part of virtually every parsing chain.
-+   All documented methods are implementations of the specifications dictated by
++   This is the only provided cursor that builds on top of a parser (and not on top of another cursor), so it is part 
++   of virtually every parsing chain. All documented methods are implementations of the specifications dictated by
 +   $(LINK2 ../interfaces/isCursor, `isCursor`).
 +   Parameters:
 +       P = The parser.
 +       conflateCData = 
-+       processBadDocument = If set to `Yes` (default is `No`), then it'll ignore errors
-+   as long as it can still process the document. Otherwise it'll throw an appropriate
-+   exception if an error is encountered.
++       processBadDocument = If set to `Yes` (default is `No`), then it'll ignore errors as long as it can still 
++   process the document. Otherwise it'll throw an appropriate exception if an error is encountered.
 +/
 struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
     Flag!"processBadDocument" processBadDocument = No.processBadDocument)
@@ -122,11 +108,13 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
     private ElementType!P currentNode;
     private bool starting, _documentEnd = true, nextFailed, _xmlDeclNotFound;
     private ptrdiff_t colon;
-    private size_t nameEnd;
+    private size_t nameBegin, nameEnd;
+    private StringType _encoding;
+    private StringType _docType;
     ///Loads system entities if needed.
     ///If not used, then it can protect against certain system entity attacks at the
     ///cost of having this feature disabled.
-    public StringType delegate(StringType path) sysEntityLoader;
+    public @safe StringType delegate(StringType path) sysEntityLoader;
 
     /++ Generic constructor; forwards its arguments to the parser constructor +/
     this(Args...)(Args args)
@@ -143,10 +131,63 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
             return result;
         }
     }
-
+    ///Returns true if XML declaration was not found.
     public @property bool xmlDeclNotFound() @nogc @safe pure nothrow
     {   
         return _xmlDeclNotFound;
+    }
+    /** 
+     * Preprocesses the document, mainly the declaration (sets document version and encoding) and the Document type, 
+     * then resets to the beginning if reset is true.
+     */
+    public void preprocess(bool reset) {
+        do
+        {
+            switch (currentNode.kind) {
+                case XMLKind.document:
+                    auto attrl = attributes();
+                    while (!attrl.empty) {
+                        Attribute!StringType attr = attrl.front;
+                        switch (attr.name) {
+                            case "version":
+                                if (attr.value == "1.0")
+                                {
+                                    parser.xmlVersion = XMLVersion.XML1_0;
+                                }
+                                else if (attr.value == "1.1")
+                                {
+                                    parser.xmlVersion = XMLVersion.XML1_1;
+                                }
+                                break;
+                            case "encoding":
+                                _encoding = attr.value;
+                                break;
+                            default:
+                                break;  //Check whether other types of attributes are allowed here.
+                        }
+                        attrl.popFront;
+                    }
+                    break;
+                case XMLKind.dtdStart: 
+                    _docType = wholeContent();
+                    break;
+                case XMLKind.entityDecl:
+                    StringType entName = name();
+                    //Check for external entities.
+                    parser._chrEntities[entName] = content();
+                    break;
+                default:
+                    goto exitloop;   
+            }
+
+        }
+        while (next);
+        exitloop:
+        if (reset) 
+        {
+            //parser.lexer.pos = 0;
+            //parser.lexer.start();
+        }
     }
 
     private bool advanceInput()
@@ -201,18 +242,9 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
             else
             {
                 // document without xml declaration???
-                /* static if (processBadDocument == No.processBadDocument)
-                {
-                    throw new CursorException("Missing XML declaration!");//callHandler(CursorError.missingXMLDeclaration);
-                }
-                else
-                {
-                    currentNode.kind = XMLKind.processingInstruction;
-                    currentNode.content = "xml version = \"1.0\"";
-                } */
                 // It turns out XML declaration is not mandatory, just assume UTF-8 and XML version 1.0 if it's missing!
                 currentNode.kind = XMLKind.processingInstruction;
-                currentNode.content = "xml version = \"1.0\"";
+                currentNode.content = "xml version = \"1.0\" encoding = \"UTF-8\"";
                 _xmlDeclNotFound = true;
             }
             starting = true;
@@ -252,7 +284,10 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
             if (currentNode.content is parser.front.content)
                 return advanceInput();
             else
+            {
                 nameEnd = 0;
+                nameBegin = 0;
+            }
 
             currentNode = parser.front;
             return true;
@@ -290,78 +325,15 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
         else if (currentNode.kind == XMLKind.dtdStart)
         {
             while (advanceInput && currentNode.kind != XMLKind.dtdEnd) 
-            { // Process DTD here!
-                switch (currentNode.kind) {
-                    case XMLKind.entityDecl:
-                        sizediff_t entityLen = fastIndexOf(currentNode.content, ' ');
-                        static if (processBadDocument == No.processBadDocument)
-                        {
-                            if (entityLen < 0)
-                                throw new CursorException("Character entity name not found!");
-                        }
-                        else 
-                        {
-                            if (entityLen < 0)
-                                continue;
-                        }
-                        StringType name = currentNode.content[0..entityLen];
-                        if (entityLen + 2 > currentNode.content.length)
-                        {
-                            bool isSysEntity;
-                            if (currentNode.content[entityLen + 2] == 'S')
-                            {
-                                if (currentNode.content[entityLen + 3..entityLen + 8] == "YSTEM")
-                                    isSysEntity = true;
-                            }
-                            
-                            sizediff_t entBegin = fastIndexOfAny(currentNode.content[entityLen + 1..$], "\"\'");
-                            static if (processBadDocument == No.processBadDocument)
-                            {
-                                if (entBegin < 0)
-                                    throw new CursorException("Character entity content not found!");
-                            }
-                            else 
-                            {
-                                if (entBegin < 0)
-                                    continue;
-                            }
-                            entBegin += entityLen;
-                            CharacterType quot = currentNode.content[entBegin];
-                            sizediff_t entEnd = fastIndexOf(currentNode.content[entBegin + 1..$], quot);
-                            static if (processBadDocument == No.processBadDocument)
-                            {
-                                if (entEnd < 0)
-                                    throw new CursorException("Character entity content wasn't ended!");
-                            }
-                            else 
-                            {
-                                if (entEnd < 0)
-                                    continue;
-                            }
-                            entEnd += entBegin;
-                            if (!isSysEntity)
-                                parser._chrEntities[name] = currentNode.content[entBegin + 1..entEnd - 1];
-                            else if (sysEntityLoader !is null)
-                                parser._chrEntities[name] = sysEntityLoader(currentNode.content[entBegin + 1..entEnd - 1]);
-                        } else {
-                            static if (processBadDocument == No.processBadDocument)
-                            {
-                                throw new CursorException("Character entity content not found!");
-                            }
-                            else 
-                            {
-                                parser._chrEntities[name] = "";
-                            }
-                        }
-                        break;
-                    default:
-                        break;
-                }
+            {
+                
             }
         }
         else if (currentNode.kind == XMLKind.elementStart)
         {
             int count = 1;
+            static if (processBadDocument == No.processBadDocument)
+                StringType currName = name;
             while (count > 0 && !parser.empty)
             {
                 if (!advanceInput)
@@ -370,6 +342,11 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
                     count++;
                 else if (currentNode.kind == XMLKind.elementEnd)
                     count--;
+            }
+            static if (processBadDocument == No.processBadDocument)
+            {
+                if (count != 0 || currName != name)
+                    throw new CursorException("Document is malformed!");
             }
         }
         if (!advanceInput || currentNode.kind == XMLKind.elementEnd || currentNode.kind == XMLKind.dtdEnd)
@@ -415,13 +392,15 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
             default:
                 if (!nameEnd)
                 {
-                    ptrdiff_t i;
-                    if ((i = fastIndexOfAny(currentNode.content, " \r\n\t")) >= 0)
-                        nameEnd = i;
+                    ptrdiff_t i, j;
+                    if ((j = fastIndexOfNeither(currentNode.content, " \r\n\t")) >= 0)
+                        nameBegin = j;
+                    if ((i = fastIndexOfAny(currentNode.content[nameBegin..$], " \r\n\t")) >= 0)
+                        nameEnd = i + nameBegin;
                     else
                         nameEnd = currentNode.content.length;
                 }
-                return currentNode.content[0..nameEnd];
+                return currentNode.content[nameBegin..nameEnd];
         }
     }
 
@@ -636,7 +615,27 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
     +/
     StringType content()
     {
-        return currentNode.content[nameEnd..$];
+        if (currentNode.kind == XMLKind.entityDecl) 
+        {
+            sizediff_t b = fastIndexOfAny(currentNode.content[nameEnd..$], "\"\'");
+            sizediff_t e = fastLastIndexOf(currentNode.content[nameEnd..$], currentNode.content[b + nameEnd]);
+            if (b > 0 && e > 0)
+            {
+                if (b + 1 <= e)
+                    return currentNode.content[nameEnd + b + 1..nameEnd + e];
+                else
+                    return null;
+            }
+            else
+            {
+                static if (processBadDocument == No.processBadDocument)
+                    throw new CursorException("Entity content not found!");
+                else
+                    return null;
+            }
+        }
+        else
+            return currentNode.content[nameEnd..$];
     }
 
     /++ Returns the entire text of the current node. +/
@@ -677,6 +676,7 @@ unittest
     import std.string : lineSplitter, strip;
     import std.algorithm : map;
     import std.array : array;
+    import std.conv : to;
 
     wstring xml = q"{
     <?xml encoding = "utf-8" ?>
@@ -726,6 +726,8 @@ unittest
             // <!ENTITY   myent    "replacement text">
             assert(cursor.kind == XMLKind.entityDecl);
             assert(cursor.wholeContent == "   myent    \"replacement text\"");
+            assert(cursor.name == "myent");
+            assert(cursor.content == "replacement text", to!string(cursor.content));
 
             assert(cursor.next);
             // <!ATTLIST myelem foo cdata #REQUIRED >
@@ -743,6 +745,8 @@ unittest
             assert(cursor.wholeContent == "FOODECL asdffdsa ");
 
             assert(!cursor.next);
+
+            //assert(cursor.parser._chrEntities["myent"] == "replacement text");
         cursor.exit;
 
         // ]>
@@ -968,15 +972,19 @@ unittest
     }
 
     assert(cursor.documentEnd());
-    /* assertThrown!XMLException({
+    {
         cursor.setSource(xml_bad);
-        auto range1 = cursor.children.front.children.front.attributes;
-        writeln(range1.front);
-    }); */
+        auto range1 = cursor.children();
+        assert(range1.front.name == "AAA");
+        auto range2 = range1.front.children();
+        assert(range2.front.name == "BBB");
+        auto range3 = range2.front.attributes();
+        assertThrown!XMLException(range3.front());
+    
+    }
 }
 
 import std.traits : isArray;
-import std.experimental.allocator.gc_allocator; //import stdx.allocator.gc_allocator;
 
 /++
 +   A cursor that wraps another cursor, copying all output strings.

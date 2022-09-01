@@ -249,6 +249,7 @@ bool parseFile(string filename, ref bool lint)
                 inspectOneLevel(cursor);
                 cursor.exit();
             }
+            
         }
         while (cursor.next());
     }

@@ -80,7 +80,7 @@ struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhite
         XMLKind kind;
     }
 
-    private L lexer;
+    package L lexer;
     private bool ready, insideDTD;
     public XMLVersion xmlVersion;
     private XMLToken next;
