@@ -79,6 +79,7 @@ unittest
     assert(fastLastIndexOf([1, 2], 3.14) == -1);
 }
 
+
 /++
 + Returns the index of the first occurrence of any of the values in the second
 + slice inside the first one.

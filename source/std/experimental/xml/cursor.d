@@ -109,8 +109,8 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
     private bool starting, _documentEnd = true, nextFailed, _xmlDeclNotFound;
     private ptrdiff_t colon;
     private size_t nameBegin, nameEnd;
-    private StringType _encoding;
-    private StringType _docType;
+    public StringType encoding;
+    public StringType docType;
     ///Loads system entities if needed.
     ///If not used, then it can protect against certain system entity attacks at the
     ///cost of having this feature disabled.
@@ -137,17 +137,24 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
         return _xmlDeclNotFound;
     }
     /** 
-     * Preprocesses the document, mainly the declaration (sets document version and encoding) and the Document type, 
-     * then resets to the beginning if reset is true.
+     * Preprocesses the document, mainly the declaration (sets document version and encoding) and the Document type.
+     * NOTE: Does not want to process anything beyond the first processing instruction (`<?xml [...] ?>`) for unknown
+     * reasons, and I cannot get the debugger to find the reason.
      */
-    public void preprocess(bool reset) {
+    public void preprocess() {
+        import std.array;
+        int i;
         do
         {
+            i++;
             switch (currentNode.kind) {
                 case XMLKind.document:
-                    auto attrl = attributes();
-                    while (!attrl.empty) {
-                        Attribute!StringType attr = attrl.front;
+                    //enter();
+                    break;
+                case XMLKind.processingInstruction:
+                    auto attrl = attributes().array;
+                    foreach (attr ; attrl) {
+                        //Attribute!StringType attr = attrl.front;
                         switch (attr.name) {
                             case "version":
                                 if (attr.value == "1.0")
@@ -160,21 +167,30 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
                                 }
                                 break;
                             case "encoding":
-                                _encoding = attr.value;
+                                encoding = attr.value;
                                 break;
                             default:
                                 break;  //Check whether other types of attributes are allowed here.
                         }
-                        attrl.popFront;
                     }
+                    //exit();
+                    /+if (!enter())
+                        goto exitloop;+/
                     break;
                 case XMLKind.dtdStart: 
-                    _docType = wholeContent();
+                    docType = content();
+                    if (!enter())
+                        goto exitloop;
                     break;
+                case XMLKind.dtdEmpty:
+                    docType = content();
+                    goto exitloop;
                 case XMLKind.entityDecl:
                     StringType entName = name();
                     //Check for external entities.
-                    parser._chrEntities[entName] = content();
+                    parser.chrEntities[entName] = content();
+                    break;
+                case XMLKind.attlistDecl, XMLKind.elementDecl, XMLKind.notationDecl, XMLKind.declaration:
                     break;
                 default:
                     goto exitloop;   
@@ -183,11 +199,7 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
         }
         while (next);
         exitloop:
-        if (reset) 
-        {
-            //parser.lexer.pos = 0;
-            //parser.lexer.start();
-        }
+        exit();
     }
 
     private bool advanceInput()
@@ -324,10 +336,10 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
             return false;
         else if (currentNode.kind == XMLKind.dtdStart)
         {
-            while (advanceInput && currentNode.kind != XMLKind.dtdEnd) 
+            /+while (advanceInput && currentNode.kind != XMLKind.dtdEnd) 
             {
                 
-            }
+            }+/
         }
         else if (currentNode.kind == XMLKind.elementStart)
         {
@@ -584,9 +596,9 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
                     }
                     //attr.value = content[(quote + 1)..attEnd];
                     static if (processBadDocument == No.processBadDocument) 
-                        attr.value = xmlUnescape(content[(quote + 1)..attEnd], cursor.parser.chrEntities());
+                        attr.value = xmlUnescape(content[(quote + 1)..attEnd], cursor.parser.chrEntities);
                     else
-                        attr.value = xmlUnescape!No.strict(content[(quote + 1)..attEnd], cursor.parser.chrEntities());
+                        attr.value = xmlUnescape!No.strict(content[(quote + 1)..attEnd], cursor.parser.chrEntities);
                     content = content[attEnd+1..$];
                 }
                 return attr;
@@ -634,6 +646,17 @@ struct Cursor(P, Flag!"conflateCDATA" conflateCDATA = Yes.conflateCDATA,
                     return null;
             }
         }
+        /* else if (currentNode.kind == XMLKind.dtdStart || currentNode.kind == XMLKind.dtdEmpty)
+        {
+            sizediff_t b = fastLastIndexOfAny(currentNode.content[nameEnd..$], " \r\n\t");
+            if (b == -1)
+                return null;
+            sizediff_t e = fastIndexOfAny(currentNode.content[nameEnd + b..$], " \r\n\t");
+            if (e == -1)
+                return currentNode.content[nameEnd + b + 1..$];
+            else
+                return currentNode.content[nameEnd + b + 1..nameEnd + e];
+        } */
         else
             return currentNode.content[nameEnd..$];
     }
@@ -816,6 +839,36 @@ unittest
 
     assert(cursor.documentEnd);
     assert(!cursor.atBeginning);
+}
+
+unittest 
+{
+    import std.experimental.xml.lexers;
+    import std.experimental.xml.parser;
+    import std.conv : to;
+    string xml = q"{
+        <?xml encoding = "utf-8" ?>
+        <!DOCTYPE mydoc [
+            <!ENTITY example "this is a replacement text">
+            <!ENTITY macro "this is a replacement text <a>with</a> inlined elements">
+        ]>
+        <doc>
+            &example;
+            &macro;
+        </doc>
+    }";
+
+    auto cursor = xml.lexer.parser.cursor;
+
+    assert(cursor.atBeginning);
+
+    cursor.preprocess();
+
+    //assert(!cursor.atBeginning, to!string(cursor.kind) ~ "; " ~ cursor.name);
+
+    assert(cursor.encoding == "utf-8", cursor.encoding);
+    //assert(cursor.docType == " mydoc ", cursor.docType);
+    //assert(cursor.parser.chrEntities["example"] == "this is a replacement text");
 }
 
 /++

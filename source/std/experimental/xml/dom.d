@@ -25,6 +25,7 @@
 
 module std.experimental.xml.dom;
 
+import std.experimental.xml.interfaces;
 import std.typecons : BitFlags;
 import std.variant : Variant;
 
@@ -203,7 +204,7 @@ enum DerivationMethod: ulong
 +   example, implementations should raise an implementation-dependent exception
 +   if a `null` argument is passed when `null` was not expected.
 +/
-abstract class DOMException: Exception
+abstract class DOMException: XMLException
 {
     ///
     @property ExceptionCode code();

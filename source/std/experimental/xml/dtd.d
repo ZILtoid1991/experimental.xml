@@ -370,7 +370,7 @@ unittest
     cursor.enter;
     assert(cursor.next);
 
-    assert(cursor.rootElem == "root");
+    assert(cursor.rootElem == "root", cursor.rootElem);
     assert(cursor.pubID == "ciaone");
     assert(cursor.sysID == "https://qualcosa");
 

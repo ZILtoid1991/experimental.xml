@@ -55,7 +55,8 @@ public class ParserException : XMLException {
 +       testTextValidity = if set to `Yes` (which is default), then the parser will test for invalid characters, and 
 +   will throw an exception on errors. Turning it off can speed up parsing.
 +       processEntityElements = if set to `Yes` (which is default), then elements within character entities will be
-+   processed, otherwise they'll be treated as just text. Turning it off can speed up parsing.
++   processed, otherwise they'll be treated as just text. Turning it off can speed up parsing and protect against 
++   certain attack types.
 +/
 struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhitespace,
     Flag!"processBadDocument" processBadDocument = No.processBadDocument, 
@@ -84,22 +85,21 @@ struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhite
     private bool ready, insideDTD;
     public XMLVersion xmlVersion;
     private XMLToken next;
-    package StringType[StringType] _chrEntities;
+    ///Contains character and text entities. Text entities might contain additional nodes and elements.
+    ///By default, it is filled with XML entities.
+    public StringType[StringType] chrEntities;
 
     //mixin UsesErrorHandler!ErrorHandler;
 
     this(L lexer) {
         this.lexer = lexer;
-        _chrEntities = xmlPredefinedEntities!CharacterType();
+        chrEntities = xmlPredefinedEntities!CharacterType();
     }
     /++ Generic constructor; forwards its arguments to the lexer constructor +/
     this(Args...)(Args args)
     {
         lexer = L(args);
-        _chrEntities = xmlPredefinedEntities!CharacterType();
-    }
-    @property StringType[StringType] chrEntities() @safe pure nothrow {
-        return _chrEntities;
+        chrEntities = xmlPredefinedEntities!CharacterType();
     }
     static if (needSource!L)
     {
@@ -112,7 +112,7 @@ struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhite
         void setSource(InputType input)
         {
             lexer.setSource(input);
-            _chrEntities = xmlPredefinedEntities!CharacterType();
+            chrEntities = xmlPredefinedEntities!CharacterType();
             ready = false;
             insideDTD = false;
         }
@@ -188,9 +188,9 @@ struct Parser(L, Flag!"preserveWhitespace" preserveWhitespace = No.preserveWhite
             lexer.advanceUntil('<', false);
             next.kind = XMLKind.text;
             static if (processBadDocument == No.processBadDocument)
-                next.content = xmlUnescape(fetchContent(), _chrEntities);
+                next.content = xmlUnescape(fetchContent(), chrEntities);
             else
-                next.content = xmlUnescape!No.strict(fetchContent(), _chrEntities);
+                next.content = xmlUnescape!No.strict(fetchContent(), chrEntities);
             static if (testTextValidity == Yes.testTextValidity)
             {
                 if (xmlVersion == XMLVersion.XML1_0)

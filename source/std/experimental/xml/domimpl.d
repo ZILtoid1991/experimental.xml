@@ -49,11 +49,13 @@ private auto multiVersionMake(Type, Args...)(auto ref Args args)
 +   does not try to do so. Instead, no object is ever deallocated; it is the users responsibility
 +   to directly free the allocator memory when all objects are no longer reachable.
 +/
-class DOMImplementation(DOMString, ErrorHandler = bool delegate(dom.DOMError!DOMString))
-                        : dom.DOMImplementation!DOMString
+class DOMImplementation(DOMString) : dom.DOMImplementation!DOMString
 {
     //mixin UsesAllocator!(Alloc, true);
     alias CharType = ElementEncodingType!DOMString;
+    this() @nogc @safe pure nothrow {
+        
+    }
     override
     {
         /++
@@ -122,7 +124,7 @@ class DOMImplementation(DOMString, ErrorHandler = bool delegate(dom.DOMError!DOM
                 return null;
         }
     }
-
+    
     /++
     +   The implementation of $(LINK2 ../dom/DOMException, `std.experimental.xml.dom.DOMException`)
     +   thrown by this DOM implementation.
@@ -1247,7 +1249,7 @@ class DOMImplementation(DOMString, ErrorHandler = bool delegate(dom.DOMError!DOM
                 //auto newData = allocator.makeArray!(Unqual!(typeof(_data[0])))(_data.length - end + offset);
                 DOMString newData = _data[0 .. offset] ~ data[end .. $];
 
-                _data = cast(typeof(_data))newData;
+                _data = newData;
             }
             void replaceData(size_t offset, size_t count, DOMString arg)
             {
@@ -1261,7 +1263,7 @@ class DOMImplementation(DOMString, ErrorHandler = bool delegate(dom.DOMError!DOM
 
                 DOMString newData = _data[0 .. offset] ~ arg ~ data[end .. $];
 
-                _data = cast(typeof(_data))newData;
+                _data = newData;
             }
         }
         // inherited from Node
@@ -1990,7 +1992,7 @@ class DOMImplementation(DOMString, ErrorHandler = bool delegate(dom.DOMError!DOM
                 }
 
                 //import std.experimental.xml.appender;
-                typeof(_data[0])[] result;//auto result = Appender!(typeof(_data[0]), typeof(*allocator))(allocator);
+                DOMString result;//auto result = Appender!(typeof(_data[0]), typeof(*allocator))(allocator);
 
                 Text node, prev = this;
                 do
@@ -2333,7 +2335,7 @@ class DOMImplementation(DOMString, ErrorHandler = bool delegate(dom.DOMError!DOM
                 @Config("cdata-sections", "bool", always) bool cdata_sections;
                 @Config("comments", "bool", always) bool comments;
                 @Config("entities", "bool", always) bool entities;
-                @Config("error-handler", "ErrorHandler", always) ErrorHandler error_handler;
+                //@Config("error-handler", "ErrorHandler", always) ErrorHandler error_handler;
                 @Config("namespace-declarations", "bool", always) bool namespace_declarations;
                 @Config("split-cdata-sections", "bool", always) bool split_cdata_sections;
             }
@@ -2458,12 +2460,12 @@ auto domBuilder(CursorType)(auto ref CursorType cursor)
     return dompar.domBuilder(cursor, new DOMImplementation!(CursorType.StringType)());//return dompar.domBuilder(cursor, new DOMImplementation!(CursorType.StringType, shared(GCAllocator))());
 }
 
-/* unittest
+unittest
 {
-    //import std.experimental.allocator.mallocator;//import stdx.allocator.mallocator;
-    DOMImplementation!(string) impl = new DOMImplementation!(string); //Mallocator.instance.make!(DOMImplementation!(string))();
+    
+    //DOMImplementation!(string) impl = new DOMImplementation!(string);
 
-    auto doc = impl.createDocument("myNamespaceURI", "myPrefix:myRootElement", null);
+    /+auto doc = impl.createDocument("myNamespaceURI", "myPrefix:myRootElement", null);
     auto root = doc.documentElement;
     assert(root.prefix == "myPrefix");
 
@@ -2519,11 +2521,12 @@ auto domBuilder(CursorType)(auto ref CursorType cursor)
     assert(elem.isEqualNode(elem.cloneNode(false)));
     assert(root.isEqualNode(root.cloneNode(true)));
     assert(comm.isEqualNode(comm.cloneNode(false)));
-    assert(pi.isEqualNode(pi.cloneNode(false)));
+    assert(pi.isEqualNode(pi.cloneNode(false)));+/
 }
 
 unittest
 {
+    import std.experimental.xml.lexers;
     import std.experimental.xml.parser;
     import std.experimental.xml.cursor;
     import std.experimental.xml.domparser;
@@ -2547,8 +2550,9 @@ unittest
     </books>
     }";
 
-    auto builder =
+    /+auto builder =
          xml
+        .lexer
         .parser
         .cursor
         .domBuilder;
@@ -2589,6 +2593,6 @@ unittest
     assert((cast(Text)(titles[1].firstChild)).wholeText == "Programming in D for Dummies");
     (cast(Text)(titles[1].lastChild)).replaceWholeText(titles[1].firstChild.textContent);
     assert(titles[1].textContent == "Programming in D");
-    assert(titles[1].childNodes.length == 1);
+    assert(titles[1].childNodes.length == 1);+/
 }
- */
+ 
